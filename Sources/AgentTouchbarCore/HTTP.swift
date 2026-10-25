@@ -1,10 +1,10 @@
 import Foundation
 
-/// 本地服务用的最小 HTTP/1.1 解析。只支持带 Content-Length 的请求，不支持分块传输和长连接。
+/// Minimal HTTP/1.1 parser for the local server. Requires Content-Length; no chunked encoding or keep-alive.
 public struct HTTPRequest: Equatable, Sendable {
     public var method: String
     public var path: String
-    public var headers: [String: String]   // 键统一小写
+    public var headers: [String: String]  // keys are lowercased
     public var body: Data
 
     public enum ParseResult: Equatable, Sendable {
@@ -13,20 +13,20 @@ public struct HTTPRequest: Equatable, Sendable {
         case invalid(String)
     }
 
-    public static let maxSize = 1 << 20   // 1 MB
+    public static let maxSize = 1 << 20  // 1 MB
 
     public static func parse(_ data: Data) -> ParseResult {
-        if data.count > maxSize { return .invalid("请求太大") }
+        if data.count > maxSize { return .invalid("Request too large") }
         let separator = Data("\r\n\r\n".utf8)
         guard let headerEnd = data.range(of: separator) else {
             return .needMore
         }
         guard let head = String(data: data[data.startIndex..<headerEnd.lowerBound], encoding: .utf8) else {
-            return .invalid("请求头不是 UTF-8")
+            return .invalid("Headers are not UTF-8")
         }
         let lines = head.components(separatedBy: "\r\n")
         let requestLine = lines[0].split(separator: " ")
-        guard requestLine.count >= 2 else { return .invalid("请求行格式错误") }
+        guard requestLine.count >= 2 else { return .invalid("Malformed request line") }
 
         var headers: [String: String] = [:]
         for line in lines.dropFirst() {
@@ -37,16 +37,18 @@ public struct HTTPRequest: Equatable, Sendable {
         }
 
         let length = Int(headers["content-length"] ?? "0") ?? -1
-        guard length >= 0 else { return .invalid("Content-Length 错误") }
+        guard length >= 0 else { return .invalid("Invalid Content-Length") }
         let bodyStart = headerEnd.upperBound
         let available = data.endIndex - bodyStart
         if available < length { return .needMore }
         let body = data[bodyStart..<(bodyStart + length)]
 
-        return .complete(HTTPRequest(method: String(requestLine[0]).uppercased(),
-                                     path: String(requestLine[1]),
-                                     headers: headers,
-                                     body: Data(body)))
+        return .complete(
+            HTTPRequest(
+                method: String(requestLine[0]).uppercased(),
+                path: String(requestLine[1]),
+                headers: headers,
+                body: Data(body)))
     }
 
     public var bearerToken: String? {

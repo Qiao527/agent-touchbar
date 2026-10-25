@@ -1,7 +1,8 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
-/// 带闭包回调的按钮。Touch Bar 只把触摸交给控件，不交给手势识别器，所以交互都用按钮。
+/// Button with a closure callback. The Touch Bar delivers touches to controls, not gesture recognizers,
+/// so all interaction goes through buttons.
 @MainActor
 final class ActionButton: NSButton {
     var handler: (() -> Void)?
@@ -23,7 +24,7 @@ final class ActionButton: NSButton {
 
     @objc private func fire() { handler?() }
 
-    /// 没有底色的按钮，用来显示可以点的文字
+    /// Borderless button, used for tappable text.
     func plain() -> ActionButton {
         isBordered = false
         return self
@@ -42,8 +43,10 @@ enum UI {
         accent = NSColor.from(theme.accent, fallback: .systemPurple)
     }
 
-    static func label(_ text: String = "", size: CGFloat? = nil, weight: NSFont.Weight = .medium,
-                      color: NSColor = .labelColor) -> NSTextField {
+    static func label(
+        _ text: String = "", size: CGFloat? = nil, weight: NSFont.Weight = .medium,
+        color: NSColor = .labelColor
+    ) -> NSTextField {
         let field = NSTextField(labelWithString: text)
         field.font = .monospacedDigitSystemFont(ofSize: size ?? fontSize, weight: weight)
         field.textColor = color
@@ -74,16 +77,21 @@ enum UI {
         return stack
     }
 
-    /// 两行小字，适合放在右侧状态区
+    /// Two lines of small text, suited to the right-hand status area.
     static func twoLines(_ top: String, _ bottom: String, color: NSColor = .labelColor) -> NSTextField {
         let style = NSMutableParagraphStyle()
         style.alignment = .center
         let font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
-        let text = NSMutableAttributedString(string: top + "\n",
-                                             attributes: [.font: font, .foregroundColor: color, .paragraphStyle: style])
-        text.append(NSAttributedString(string: bottom,
-                                       attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor,
-                                                    .paragraphStyle: style]))
+        let text = NSMutableAttributedString(
+            string: top + "\n",
+            attributes: [.font: font, .foregroundColor: color, .paragraphStyle: style])
+        text.append(
+            NSAttributedString(
+                string: bottom,
+                attributes: [
+                    .font: font, .foregroundColor: NSColor.secondaryLabelColor,
+                    .paragraphStyle: style,
+                ]))
         let field = NSTextField(labelWithAttributedString: text)
         field.maximumNumberOfLines = 2
         field.translatesAutoresizingMaskIntoConstraints = false
@@ -91,7 +99,7 @@ enum UI {
     }
 }
 
-/// 细长的进度条
+/// Thin progress bar.
 @MainActor
 final class ProgressBar: NSView {
     var fraction: Double = 0 { didSet { needsDisplay = true } }

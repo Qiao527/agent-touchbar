@@ -1,17 +1,19 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
-// MARK: - 主线程
+// MARK: - Main thread
 
-/// 从任意线程切回主线程执行
+/// Hops from any thread onto the main thread.
 func onMain(_ work: @escaping @MainActor () -> Void) {
     DispatchQueue.main.async { MainActor.assumeIsolated { work() } }
 }
 
-/// 在主线程上的重复定时器
+/// Repeating timer on the main run loop.
 @MainActor
-func repeatingTimer(_ interval: TimeInterval, fireNow: Bool = true,
-                    _ work: @escaping @MainActor () -> Void) -> Timer {
+func repeatingTimer(
+    _ interval: TimeInterval, fireNow: Bool = true,
+    _ work: @escaping @MainActor () -> Void
+) -> Timer {
     let timer = Timer(timeInterval: interval, repeats: true) { _ in
         MainActor.assumeIsolated { work() }
     }
@@ -21,7 +23,7 @@ func repeatingTimer(_ interval: TimeInterval, fireNow: Bool = true,
     return timer
 }
 
-// MARK: - 日志
+// MARK: - Logging
 
 enum Log {
     private static let queue = DispatchQueue(label: "agentTouchbar.log")
@@ -33,9 +35,12 @@ enum Log {
         let line = "\(ISO8601DateFormatter().string(from: Date())) [\(level)] \(message)\n"
         queue.async {
             let url = Paths.logFile
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            // 日志超过 2 MB 就从头开始
-            if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int, size > 2_000_000 {
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            // Start over once the log exceeds 2 MB.
+            if let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int,
+                size > 2_000_000
+            {
                 try? FileManager.default.removeItem(at: url)
             }
             if !FileManager.default.fileExists(atPath: url.path) {
@@ -50,7 +55,7 @@ enum Log {
     }
 }
 
-// MARK: - 运行命令
+// MARK: - Running commands
 
 enum Shell {
     private static let queue = DispatchQueue(label: "agentTouchbar.shell", attributes: .concurrent)
@@ -61,23 +66,29 @@ enum Shell {
         var error: String
     }
 
-    /// 在后台运行程序，结果回到主线程
-    static func run(_ executable: String, _ arguments: [String], timeout: TimeInterval = 15,
-                    completion: (@MainActor (Result) -> Void)? = nil) {
+    /// Runs a program in the background and delivers the result on the main thread.
+    static func run(
+        _ executable: String, _ arguments: [String], timeout: TimeInterval = 15,
+        completion: (@MainActor (Result) -> Void)? = nil
+    ) {
         queue.async {
             let result = runSync(executable, arguments, timeout: timeout)
             if let completion { onMain { completion(result) } }
         }
     }
 
-    /// 用登录 shell 运行一段命令，这样能用到你在 .zshrc 里配置的 PATH
-    static func shell(_ command: String, timeout: TimeInterval = 30,
-                      completion: (@MainActor (Result) -> Void)? = nil) {
+    /// Runs a command in a login shell so the PATH from your .zshrc is available.
+    static func shell(
+        _ command: String, timeout: TimeInterval = 30,
+        completion: (@MainActor (Result) -> Void)? = nil
+    ) {
         run("/bin/zsh", ["-lc", command], timeout: timeout, completion: completion)
     }
 
-    static func osascript(_ source: String, timeout: TimeInterval = 5,
-                          completion: (@MainActor (Result) -> Void)? = nil) {
+    static func osascript(
+        _ source: String, timeout: TimeInterval = 5,
+        completion: (@MainActor (Result) -> Void)? = nil
+    ) {
         run("/usr/bin/osascript", ["-e", source], timeout: timeout, completion: completion)
     }
 
@@ -94,36 +105,41 @@ enum Shell {
         } catch {
             return Result(status: -1, output: "", error: error.localizedDescription)
         }
-        // 先读输出再等待退出，避免输出太多把管道塞满
+        // Drain output before waiting for exit, so a large output cannot fill the pipe and deadlock.
         let group = DispatchGroup()
         var outData = Data(), errData = Data()
         group.enter()
-        DispatchQueue.global().async { outData = out.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        DispatchQueue.global().async {
+            outData = out.fileHandleForReading.readDataToEndOfFile(); group.leave()
+        }
         group.enter()
-        DispatchQueue.global().async { errData = err.fileHandleForReading.readDataToEndOfFile(); group.leave() }
+        DispatchQueue.global().async {
+            errData = err.fileHandleForReading.readDataToEndOfFile(); group.leave()
+        }
 
         let deadline = DispatchTime.now() + timeout
         if group.wait(timeout: deadline) == .timedOut {
             process.terminate()
-            return Result(status: -2, output: "", error: "超时")
+            return Result(status: -2, output: "", error: "Timed out")
         }
         process.waitUntilExit()
-        return Result(status: process.terminationStatus,
-                      output: String(data: outData, encoding: .utf8) ?? "",
-                      error: String(data: errData, encoding: .utf8) ?? "")
+        return Result(
+            status: process.terminationStatus,
+            output: String(data: outData, encoding: .utf8) ?? "",
+            error: String(data: errData, encoding: .utf8) ?? "")
     }
 
-    /// AppleScript 字符串转义
+    /// Escapes a string as an AppleScript string literal.
     static func quote(_ text: String) -> String {
         "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 }
 
-// MARK: - 键盘和粘贴
+// MARK: - Keyboard and pasting
 
 @MainActor
 enum Keyboard {
-    /// 发送快捷键，需要"辅助功能"权限
+    /// Sends a keyboard shortcut. Requires Accessibility permission.
     static func send(_ combo: KeyCombo) {
         guard Permissions.accessibility(prompt: true) else { return }
         let source = CGEventSource(stateID: .hidSystemState)
@@ -144,10 +160,10 @@ enum Keyboard {
         if let combo = KeyCombo.parse(text) { send(combo) }
     }
 
-    /// 写入剪贴板并粘贴到当前输入框。concealed 为 true 时，剪贴板管理工具（包括我们自己）会忽略这条内容
+    /// Copies to the clipboard and pastes into the focused field. With concealed, clipboard managers (including ours) ignore the entry.
     static func paste(_ text: String, concealed: Bool = false) {
         copy(text, concealed: concealed)
-        // 等剪贴板写入生效
+        // Give the clipboard write time to land.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             MainActor.assumeIsolated { send(KeyCombo(command: true, keyCode: 0x09)) }
         }
@@ -163,25 +179,26 @@ enum Keyboard {
         }
     }
 
-    /// 系统按键（亮度、媒体键），和 MTMR 的做法一样
+    /// System keys (brightness, media keys), posted the same way MTMR does it.
     static func systemKey(_ key: Int32) {
         func post(down: Bool) {
             let flags = NSEvent.ModifierFlags(rawValue: down ? 0xA00 : 0xB00)
             let data1 = Int((key << 16) | ((down ? 0xA : 0xB) << 8))
-            let event = NSEvent.otherEvent(with: .systemDefined, location: .zero, modifierFlags: flags,
-                                           timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
-                                           data1: data1, data2: -1)
+            let event = NSEvent.otherEvent(
+                with: .systemDefined, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
+                data1: data1, data2: -1)
             event?.cgEvent?.post(tap: .cghidEventTap)
         }
         post(down: true)
         post(down: false)
     }
 
-    static let brightnessUp: Int32 = 2      // NX_KEYTYPE_BRIGHTNESS_UP
-    static let brightnessDown: Int32 = 3    // NX_KEYTYPE_BRIGHTNESS_DOWN
+    static let brightnessUp: Int32 = 2  // NX_KEYTYPE_BRIGHTNESS_UP
+    static let brightnessDown: Int32 = 3  // NX_KEYTYPE_BRIGHTNESS_DOWN
 }
 
-// MARK: - 权限
+// MARK: - Permissions
 
 @MainActor
 enum Permissions {
@@ -210,7 +227,7 @@ enum Permissions {
     }
 }
 
-// MARK: - 钥匙串
+// MARK: - Keychain
 
 enum Keychain {
     static func read(service: String, account: String) -> String? {
@@ -223,12 +240,13 @@ enum Keychain {
         ]
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
+            let data = item as? Data
+        else { return nil }
         return String(data: data, encoding: .utf8)
     }
 }
 
-// MARK: - 颜色和图标
+// MARK: - Colors and icons
 
 extension NSColor {
     static func from(_ text: String?, fallback: NSColor = .labelColor) -> NSColor {
@@ -238,7 +256,7 @@ extension NSColor {
 }
 
 enum Icon {
-    /// `sf:符号名` → SF Symbols；其他当作图片路径
+    /// `sf:symbol-name` → SF Symbols; anything else is treated as an image path.
     static func image(_ spec: String?, size: CGFloat = 15) -> NSImage? {
         guard let spec, !spec.isEmpty else { return nil }
         if spec.hasPrefix("sf:") {
@@ -252,7 +270,7 @@ enum Icon {
     }
 }
 
-// MARK: - 跳回终端
+// MARK: - Jumping back to the terminal
 
 @MainActor
 enum AppActivator {
@@ -266,7 +284,7 @@ enum AppActivator {
         "Hyper": "co.zeit.hyper",
     ]
 
-    /// terminal 可以是 bundle id，也可以是 TERM_PROGRAM 的值
+    /// terminal may be a bundle id or a TERM_PROGRAM value.
     static func activate(terminal: String?) {
         guard let terminal else { return }
         let bundleID = terminalBundleIDs[terminal] ?? terminal

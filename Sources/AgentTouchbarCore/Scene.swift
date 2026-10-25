@@ -1,11 +1,11 @@
 import Foundation
 
-/// 当前环境，由程序定期采集
+/// Current environment, sampled periodically by the app.
 public struct Context: Equatable, Sendable {
     public var frontmostBundleID: String?
     public var frontmostAppName: String?
     public var micInUse: Bool
-    /// 正在播放音乐的程序，例如 "spotify"
+    /// App currently playing audio, e.g. "spotify"
     public var nowPlaying: String?
     public var onBattery: Bool
     public var inMeeting: Bool
@@ -30,7 +30,7 @@ public struct Context: Equatable, Sendable {
     }
 }
 
-/// 一条场景规则
+/// A scene rule.
 public struct Scene: Decodable, Equatable, Sendable {
     public var name: String
     public var when: Condition
@@ -41,8 +41,10 @@ public struct Scene: Decodable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey { case name, when, left, island, right, hide }
 
-    public init(name: String, when: Condition, left: [String]? = nil, island: [String]? = nil,
-                right: [String]? = nil, hide: [String] = []) {
+    public init(
+        name: String, when: Condition, left: [String]? = nil, island: [String]? = nil,
+        right: [String]? = nil, hide: [String] = []
+    ) {
         self.name = name
         self.when = when
         self.left = left
@@ -53,7 +55,7 @@ public struct Scene: Decodable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        name = try c.value(.name, default: "未命名场景")
+        name = try c.value(.name, default: L("Untitled scene"))
         when = try c.value(.when, default: Condition())
         left = try c.decodeIfPresent([String].self, forKey: .left)
         island = try c.decodeIfPresent([String].self, forKey: .island)
@@ -62,16 +64,16 @@ public struct Scene: Decodable, Equatable, Sendable {
     }
 }
 
-/// 场景的触发条件。写了的条件默认要全部满足；`match: any` 时满足任意一个即可。
+/// Scene trigger. All listed conditions must hold by default; with `match: any`, one is enough.
 public struct Condition: Decodable, Equatable, Sendable {
-    /// 前台程序的 bundle id 或名字
+    /// Bundle id or name of the frontmost app
     public var app: [String]?
     public var micInUse: Bool?
-    /// 正在播放的程序，例如 spotify
+    /// App currently playing, e.g. spotify
     public var playing: String?
-    /// "HH:mm-HH:mm"，可以跨午夜
+    /// "HH:mm-HH:mm"; may wrap past midnight
     public var time: String?
-    /// 1 = 周一 … 7 = 周日
+    /// 1 = Monday … 7 = Sunday
     public var weekdays: [Int]?
     public var onBattery: Bool?
     public var inMeeting: Bool?
@@ -84,8 +86,10 @@ public struct Condition: Decodable, Equatable, Sendable {
         case inMeeting = "in_meeting"
     }
 
-    public init(app: [String]? = nil, micInUse: Bool? = nil, playing: String? = nil, time: String? = nil,
-                weekdays: [Int]? = nil, onBattery: Bool? = nil, inMeeting: Bool? = nil, matchAny: Bool = false) {
+    public init(
+        app: [String]? = nil, micInUse: Bool? = nil, playing: String? = nil, time: String? = nil,
+        weekdays: [Int]? = nil, onBattery: Bool? = nil, inMeeting: Bool? = nil, matchAny: Bool = false
+    ) {
         self.app = app
         self.micInUse = micInUse
         self.playing = playing
@@ -124,7 +128,7 @@ public struct Condition: Decodable, Equatable, Sendable {
         if let playing { checks.append(context.nowPlaying?.lowercased() == playing.lowercased()) }
         if let time { checks.append(TimeRange(time)?.contains(context.date, calendar: calendar) ?? false) }
         if let weekdays {
-            // Calendar 的 weekday：1 = 周日；换算成 1 = 周一
+            // Calendar weekday is 1 = Sunday; convert to 1 = Monday
             let weekday = calendar.component(.weekday, from: context.date)
             let mondayBased = weekday == 1 ? 7 : weekday - 1
             checks.append(weekdays.contains(mondayBased))
@@ -132,15 +136,15 @@ public struct Condition: Decodable, Equatable, Sendable {
         if let onBattery { checks.append(context.onBattery == onBattery) }
         if let inMeeting { checks.append(context.inMeeting == inMeeting) }
 
-        // 没写任何条件的场景永远匹配，可以当作兜底
+        // A scene with no conditions always matches and works as a fallback
         guard !checks.isEmpty else { return true }
         return matchAny ? checks.contains(true) : !checks.contains(false)
     }
 }
 
-/// "22:00-06:00" 这样的时间段
+/// A time range such as "22:00-06:00".
 public struct TimeRange: Equatable, Sendable {
-    public var start: Int   // 当天的分钟数
+    public var start: Int  // minutes since midnight
     public var end: Int
 
     public init?(_ text: String) {
@@ -155,7 +159,8 @@ public struct TimeRange: Equatable, Sendable {
     private static func minutes(_ text: String) -> Int? {
         let parts = text.split(separator: ":")
         guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
-              (0...24).contains(h), (0..<60).contains(m) else { return nil }
+            (0...24).contains(h), (0..<60).contains(m)
+        else { return nil }
         return h * 60 + m
     }
 
@@ -163,11 +168,11 @@ public struct TimeRange: Equatable, Sendable {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         let now = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
         if start <= end { return now >= start && now < end }
-        return now >= start || now < end   // 跨午夜
+        return now >= start || now < end  // wraps past midnight
     }
 }
 
-/// 根据场景规则算出每个区域该显示哪些组件
+/// Widgets each zone should show after applying scene rules.
 public struct ResolvedLayout: Equatable, Sendable {
     public var sceneName: String?
     public var left: [String]
@@ -183,9 +188,11 @@ public struct ResolvedLayout: Equatable, Sendable {
 }
 
 public enum SceneMatcher {
-    /// 第一个匹配的场景生效；没有匹配时使用默认布局
-    public static func resolve(layout: Layout, scenes: [Scene], context: Context,
-                               calendar: Calendar = .current) -> ResolvedLayout {
+    /// The first matching scene wins; with no match, the default layout is used.
+    public static func resolve(
+        layout: Layout, scenes: [Scene], context: Context,
+        calendar: Calendar = .current
+    ) -> ResolvedLayout {
         guard let scene = scenes.first(where: { $0.when.matches(context, calendar: calendar) }) else {
             return ResolvedLayout(sceneName: nil, left: layout.left, island: layout.island, right: layout.right)
         }

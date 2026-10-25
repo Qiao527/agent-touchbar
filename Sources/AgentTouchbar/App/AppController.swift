@@ -1,8 +1,8 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 import ServiceManagement
 
-/// 把所有部分接在一起：配置 → 数据源 → 场景 → 渲染到 Touch Bar
+/// Wires everything together: config → data sources → scenes → Touch Bar rendering.
 @MainActor
 final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let env = Env()
@@ -24,13 +24,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let menu = NSMenu()
 
-    // MARK: 启动
+    // MARK: Launch
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             token = try Token.loadOrCreate()
         } catch {
-            Log.error("无法创建 token：\(error.localizedDescription)")
+            Log.error("Failed to create token: \(error.localizedDescription)")
         }
         setUpStatusItem()
         wireEnvironment()
@@ -50,9 +50,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         host.show()
         if !host.isAvailable {
-            env.alerts.post(kind: AlertKind.custom, id: "no-dfr", source: "app", title: "这个系统不支持全局 Touch Bar",
-                            detail: "私有接口不可用，提醒会改为显示在菜单栏", icon: "sf:exclamationmark.triangle.fill",
-                            color: "red", ttl: 0)
+            env.alerts.post(
+                kind: AlertKind.custom, id: "no-dfr", source: "app",
+                title: L("This system does not support a global Touch Bar"),
+                detail: L("Private API unavailable; alerts will appear in the menu bar instead"),
+                icon: "sf:exclamationmark.triangle.fill",
+                color: "red", ttl: 0)
         }
 
         let workspace = NSWorkspace.shared.notificationCenter
@@ -67,14 +70,14 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.host.show() }
         }
-        Log.info("agentTouchbar 已启动")
+        Log.info("agentTouchbar started")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         host.hide()
     }
 
-    // MARK: 配置
+    // MARK: Config
 
     private func apply(_ config: AppConfig) {
         env.config = config
@@ -103,7 +106,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             startServer(port: config.server.port)
         }
 
-        // 组件全部重建，状态保存在各个数据源里，不会丢
+        // Rebuild all widgets. State lives in the data sources, so nothing is lost.
         for widget in widgets.values { widget.disappear() }
         backgroundWidgets.forEach { $0.disappear() }
         widgets.removeAll()
@@ -121,9 +124,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func configError(_ error: String?) {
         if let error {
-            env.alerts.post(kind: AlertKind.custom, id: "config-error", source: "config", title: "配置文件有错误",
-                            detail: error, icon: "sf:exclamationmark.triangle.fill", color: "red",
-                            actions: [AlertAction(id: "open", title: "打开")], ttl: 0) { [weak self] action in
+            env.alerts.post(
+                kind: AlertKind.custom, id: "config-error", source: "config", title: L("Config file has errors"),
+                detail: error, icon: "sf:exclamationmark.triangle.fill", color: "red",
+                actions: [AlertAction(id: "open", title: L("Open"))], ttl: 0
+            ) { [weak self] action in
                 if action == "open" || action == "tap" { self?.openConfig() }
             }
         } else {
@@ -132,7 +137,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateStatusIcon()
     }
 
-    // MARK: 组件和渲染
+    // MARK: Widgets and rendering
 
     private func widget(_ id: String) -> Widget {
         if let existing = widgets[id] { return existing }
@@ -186,7 +191,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             island = UI.row(islandWidgets.map(\.view), spacing: UI.spacing * 1.5)
         }
 
-        // 只让看得见的组件刷新
+        // Only visible widgets get refreshed.
         let shownIDs = Set(shown.map(ObjectIdentifier.init))
         for widget in widgets.values where !shownIDs.contains(ObjectIdentifier(widget)) {
             widget.disappear()
@@ -211,7 +216,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             views.append(UI.imageView(icon, tint: color, size: 22))
         }
 
-        // 正文本身也是按钮：点一下执行 tapAction
+        // The body text is a button too: tapping it runs tapAction.
         let text = ActionButton(title: "") { [weak self] in
             self?.env.alerts.perform(alertID: alert.id, actionID: alert.tapAction ?? "tap")
         }
@@ -220,9 +225,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             string: alert.title,
             attributes: [.font: NSFont.systemFont(ofSize: UI.fontSize + 1, weight: .semibold), .foregroundColor: color])
         if let detail = alert.detail, !detail.isEmpty {
-            attributed.append(NSAttributedString(
-                string: "  " + Text.truncate(detail, 48),
-                attributes: [.font: NSFont.systemFont(ofSize: UI.fontSize - 1), .foregroundColor: NSColor.secondaryLabelColor]))
+            attributed.append(
+                NSAttributedString(
+                    string: "  " + Text.truncate(detail, 48),
+                    attributes: [
+                        .font: NSFont.systemFont(ofSize: UI.fontSize - 1),
+                        .foregroundColor: NSColor.secondaryLabelColor,
+                    ]))
         }
         text.attributedTitle = attributed
         text.lineBreakMode = .byTruncatingTail
@@ -231,15 +240,18 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         views.append(text)
 
         for action in alert.actions {
-            views.append(ActionButton(title: action.title, color: NSColor.from(action.color, fallback: .systemGray)) { [weak self] in
-                self?.env.alerts.perform(alertID: alert.id, actionID: action.id)
-            })
+            views.append(
+                ActionButton(title: action.title, color: NSColor.from(action.color, fallback: .systemGray)) {
+                    [weak self] in
+                    self?.env.alerts.perform(alertID: alert.id, actionID: action.id)
+                })
         }
         let others = env.alerts.queue.count - 1
         if others > 0 {
-            views.append(ActionButton(title: "+\(others)", color: .darkGray) { [weak self] in
-                self?.env.alerts.focusNext()
-            })
+            views.append(
+                ActionButton(title: "+\(others)", color: .darkGray) { [weak self] in
+                    self?.env.alerts.focusNext()
+                })
         }
         let close = ActionButton(title: "", icon: Icon.image("sf:xmark", size: 11)) { [weak self] in
             self?.env.alerts.perform(alertID: alert.id, actionID: "dismiss")
@@ -265,7 +277,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         render()
     }
 
-    // MARK: 数据源
+    // MARK: Data sources
 
     private func wireEnvironment() {
         env.showOverlay = { [weak self] title, views in self?.showOverlay(title, views) }
@@ -297,31 +309,40 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.calendar.onMeetingSoon = { [weak self] event in
             guard let self else { return }
             var actions: [AlertAction] = []
-            if event.link != nil { actions.append(AlertAction(id: "join", title: "加入", color: "green")) }
-            self.env.alerts.post(kind: AlertKind.meetingSoon, id: "meeting-\(event.id)", source: "calendar",
-                                 title: "\(Text.countdown(to: event.start)) · \(event.title)", icon: "sf:calendar.badge.clock",
-                                 color: "blue", actions: actions, tapAction: event.link == nil ? nil : "join") { action in
+            if event.link != nil { actions.append(AlertAction(id: "join", title: L("Join"), color: "green")) }
+            self.env.alerts.post(
+                kind: AlertKind.meetingSoon, id: "meeting-\(event.id)", source: "calendar",
+                title: "\(Text.countdown(to: event.start)) · \(event.title)", icon: "sf:calendar.badge.clock",
+                color: "blue", actions: actions, tapAction: event.link == nil ? nil : "join"
+            ) { action in
                 if action == "join" || action == "tap", let link = event.link { NSWorkspace.shared.open(link) }
             }
         }
 
         env.battery.onLow = { [weak self] percent in
-            self?.env.alerts.post(kind: AlertKind.batteryLow, id: "battery-low", source: "battery",
-                                  title: "电量只剩 \(percent)%", detail: "记得接上电源", icon: "sf:battery.25percent", color: "red")
+            self?.env.alerts.post(
+                kind: AlertKind.batteryLow, id: "battery-low", source: "battery",
+                title: L("Battery at {0}%", percent), detail: L("Plug in the charger"), icon: "sf:battery.25percent",
+                color: "red")
         }
 
         env.bluetooth.onLow = { [weak self] device in
-            self?.env.alerts.post(kind: AlertKind.batteryLow, id: "bt-low-\(device.device)", source: "bluetooth",
-                                  title: "\(device.device) 电量低", detail: "最低 \(device.lowest ?? 0)%",
-                                  icon: "sf:airpodspro", color: "orange")
+            self?.env.alerts.post(
+                kind: AlertKind.batteryLow, id: "bt-low-\(device.device)", source: "bluetooth",
+                title: L("{0} battery low", device.device), detail: L("Lowest {0}%", device.lowest ?? 0),
+                icon: "sf:airpodspro", color: "orange")
         }
 
         downloads.onFinished = { [weak self] url in
-            self?.env.alerts.post(kind: AlertKind.downloadDone, id: "download-\(url.path)", source: "downloads",
-                                  title: "已下载", detail: url.lastPathComponent, icon: "sf:arrow.down.circle.fill", color: "blue",
-                                  actions: [AlertAction(id: "open", title: "打开", color: "blue"),
-                                            AlertAction(id: "reveal", title: "显示", color: "gray")],
-                                  tapAction: "open") { action in
+            self?.env.alerts.post(
+                kind: AlertKind.downloadDone, id: "download-\(url.path)", source: "downloads",
+                title: L("Downloaded"), detail: url.lastPathComponent, icon: "sf:arrow.down.circle.fill", color: "blue",
+                actions: [
+                    AlertAction(id: "open", title: L("Open"), color: "blue"),
+                    AlertAction(id: "reveal", title: L("Show in Finder"), color: "gray"),
+                ],
+                tapAction: "open"
+            ) { action in
                 switch action {
                 case "open", "tap": NSWorkspace.shared.open(url)
                 case "reveal": NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -333,18 +354,22 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func showCode(_ code: VerificationCode) {
         let clearAfter = env.config.verificationCodes.clearClipboardAfter
-        env.alerts.post(kind: AlertKind.verificationCode, id: "code-\(code.code)", source: "messages",
-                        title: code.code, detail: code.source.map { "来自 \($0)" }, icon: "sf:key.fill", color: "yellow",
-                        actions: [AlertAction(id: "paste", title: "粘贴", color: "green"),
-                                  AlertAction(id: "copy", title: "复制", color: "gray")],
-                        tapAction: "paste") { action in
+        env.alerts.post(
+            kind: AlertKind.verificationCode, id: "code-\(code.code)", source: "messages",
+            title: code.code, detail: code.source.map { L("From {0}", $0) }, icon: "sf:key.fill", color: "yellow",
+            actions: [
+                AlertAction(id: "paste", title: L("Paste"), color: "green"),
+                AlertAction(id: "copy", title: L("Copy"), color: "gray"),
+            ],
+            tapAction: "paste"
+        ) { action in
             guard ["paste", "tap", "copy"].contains(action) else { return }
             if action == "copy" {
                 Keyboard.copy(code.code, concealed: true)
             } else {
                 Keyboard.paste(code.code, concealed: true)
             }
-            // 一段时间后，如果剪贴板里还是这个码，就清掉
+            // After a while, clear the clipboard if it still holds this code.
             DispatchQueue.main.asyncAfter(deadline: .now() + clearAfter) {
                 MainActor.assumeIsolated {
                     if NSPasteboard.general.string(forType: .string) == code.code {
@@ -355,13 +380,13 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    // MARK: 本地服务
+    // MARK: Local server
 
     private func startServer(port: Int) {
         server?.stop()
         let server = AgentServer(token: token)
         server.handler = { [weak self] request, respond in
-            self?.handle(request, respond) ?? respond(.error(503, "未就绪"))
+            self?.handle(request, respond) ?? respond(.error(503, "Not ready"))
         }
         server.start(port: port)
         self.server = server
@@ -369,39 +394,41 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func handle(_ request: HTTPRequest, _ respond: @escaping (HTTPResponse) -> Void) {
         let decoder = JSONDecoder()
-        guard request.method == "POST" else { return respond(.error(405, "只支持 POST")) }
+        guard request.method == "POST" else { return respond(.error(405, "Only POST is supported")) }
         switch request.path {
         case "/v1/agent":
             guard let event = try? decoder.decode(AgentEvent.self, from: request.body) else {
-                return respond(.error(400, "AgentEvent 格式错误"))
+                return respond(.error(400, "Malformed AgentEvent"))
             }
             env.agents.handle(event)
             respond(.json(["ok": true]))
         case "/v1/permission":
             guard let message = try? decoder.decode(PermissionRequestMessage.self, from: request.body) else {
-                return respond(.error(400, "PermissionRequest 格式错误"))
+                return respond(.error(400, "Malformed PermissionRequest"))
             }
             env.agents.requestPermission(message) { decision in
                 respond(.json(PermissionResponse(decision: decision)))
             }
         case "/v1/notify":
             guard let note = try? decoder.decode(NotifyRequest.self, from: request.body) else {
-                return respond(.error(400, "NotifyRequest 格式错误"))
+                return respond(.error(400, "Malformed NotifyRequest"))
             }
-            env.alerts.post(kind: note.kind ?? AlertKind.custom, id: note.id, source: "atb", title: note.title,
-                            detail: note.detail, icon: note.icon ?? "sf:bell.fill", color: note.color,
-                            actions: note.actions ?? [], priority: note.priority, ttl: note.ttl)
+            env.alerts.post(
+                kind: note.kind ?? AlertKind.custom, id: note.id, source: "atb", title: note.title,
+                detail: note.detail, icon: note.icon ?? "sf:bell.fill", color: note.color,
+                actions: note.actions ?? [], priority: note.priority, ttl: note.ttl)
             respond(.json(["ok": true]))
         default:
-            respond(.error(404, "没有这个接口"))
+            respond(.error(404, "No such endpoint"))
         }
     }
 
-    // MARK: 菜单栏
+    // MARK: Menu bar
 
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "rectangle.topthird.inset.filled", accessibilityDescription: "agentTouchbar")
+        item.button?.image = NSImage(
+            systemSymbolName: "rectangle.topthird.inset.filled", accessibilityDescription: "agentTouchbar")
         item.button?.image?.isTemplate = true
         menu.delegate = self
         item.menu = menu
@@ -411,7 +438,8 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func updateStatusIcon() {
         let warning = store.lastError != nil || messages.needsFullDiskAccess || server?.lastError != nil
         let alerting = !host.isShown && !env.alerts.queue.isEmpty
-        let name = warning ? "exclamationmark.triangle.fill" : alerting ? "bell.badge.fill" : "rectangle.topthird.inset.filled"
+        let name =
+            warning ? "exclamationmark.triangle.fill" : alerting ? "bell.badge.fill" : "rectangle.topthird.inset.filled"
         statusItem?.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "agentTouchbar")
         statusItem?.button?.image?.isTemplate = !alerting
     }
@@ -425,47 +453,57 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(item)
         }
 
-        add("场景：\(sceneName ?? "默认")", nil, enabled: false)
+        add(L("Scene: {0}", sceneName ?? L("Default")), nil, enabled: false)
         if let server, server.lastError == nil {
-            add("本地服务：127.0.0.1:\(server.port)", nil, enabled: false)
+            add(L("Local server: 127.0.0.1:{0}", server.port), nil, enabled: false)
         }
         let sessions = env.agents.active.count
-        if sessions > 0 { add("Agent 会话：\(sessions) 个", nil, enabled: false) }
+        if sessions > 0 { add(L("Agent sessions: {0}", sessions), nil, enabled: false) }
 
-        if let error = store.lastError { add("⚠️ 配置错误：\(Text.truncate(error, 60))", #selector(openConfig)) }
+        if let error = store.lastError {
+            add(L("⚠️ Config error: {0}", Text.truncate(error, 60)), #selector(openConfig))
+        }
         if let error = server?.lastError { add("⚠️ \(error)", nil, enabled: false) }
-        if !host.isAvailable { add("⚠️ 这个系统不支持全局 Touch Bar", nil, enabled: false) }
-        if messages.needsFullDiskAccess { add("⚠️ 验证码需要「完全磁盘访问权限」…", #selector(openFullDiskAccess)) }
-        if !AXIsProcessTrusted() { add("⚠️ 粘贴、快捷键需要「辅助功能」权限…", #selector(openAccessibility)) }
+        if !host.isAvailable { add("⚠️ " + L("This system does not support a global Touch Bar"), nil, enabled: false) }
+        if messages.needsFullDiskAccess {
+            add(L("⚠️ Verification codes need Full Disk Access…"), #selector(openFullDiskAccess))
+        }
+        if !AXIsProcessTrusted() {
+            add(L("⚠️ Pasting and shortcuts need Accessibility permission…"), #selector(openAccessibility))
+        }
 
         menu.addItem(.separator())
-        add(host.isShown ? "隐藏 Touch Bar" : "显示 Touch Bar", #selector(toggleTouchBar))
-        add("发送测试提醒", #selector(testAlert))
+        add(host.isShown ? L("Hide Touch Bar") : L("Show Touch Bar"), #selector(toggleTouchBar))
+        add(L("Send test alert"), #selector(testAlert))
         menu.addItem(.separator())
-        add("打开配置文件", #selector(openConfig))
-        add("重新加载配置", #selector(reloadConfig))
-        add("打开配置目录", #selector(openConfigFolder))
-        add("复制 Claude Code 的 hooks 配置", #selector(copyClaudeHooks))
-        add("复制 Codex 的 hooks 配置", #selector(copyCodexHooks))
-        add("查看日志", #selector(openLog))
+        add(L("Open config file"), #selector(openConfig))
+        add(L("Reload config"), #selector(reloadConfig))
+        add(L("Open config folder"), #selector(openConfigFolder))
+        add(L("Copy Claude Code hooks config"), #selector(copyClaudeHooks))
+        add(L("Copy Codex hooks config"), #selector(copyCodexHooks))
+        add(L("View log"), #selector(openLog))
         menu.addItem(.separator())
-        let login = NSMenuItem(title: "开机自动启动", action: #selector(toggleLogin), keyEquivalent: "")
+        let login = NSMenuItem(title: L("Launch at login"), action: #selector(toggleLogin), keyEquivalent: "")
         login.target = self
         login.state = SMAppService.mainApp.status == .enabled ? .on : .off
         menu.addItem(login)
-        menu.addItem(NSMenuItem(title: "退出 agentTouchbar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(
+            NSMenuItem(
+                title: L("Quit agentTouchbar"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     @objc private func toggleTouchBar() { host.toggle(); updateStatusIcon() }
 
     @objc private func testAlert() {
-        env.alerts.post(kind: AlertKind.custom, source: "menu", title: "测试提醒", detail: "agentTouchbar 工作正常",
-                        icon: "sf:sparkles", color: "purple", actions: [AlertAction(id: "ok", title: "好的", color: "green")])
+        env.alerts.post(
+            kind: AlertKind.custom, source: "menu", title: L("Test alert"), detail: L("agentTouchbar is working"),
+            icon: "sf:sparkles", color: "purple", actions: [AlertAction(id: "ok", title: L("OK"), color: "green")])
     }
 
     @objc private func openConfig() {
-        NSWorkspace.shared.open([Paths.configFile], withApplicationAt: URL(fileURLWithPath: "/System/Applications/TextEdit.app"),
-                                configuration: NSWorkspace.OpenConfiguration())
+        NSWorkspace.shared.open(
+            [Paths.configFile], withApplicationAt: URL(fileURLWithPath: "/System/Applications/TextEdit.app"),
+            configuration: NSWorkspace.OpenConfiguration())
     }
 
     @objc private func reloadConfig() { store.reload(force: true) }
@@ -484,9 +522,11 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let atb = Bundle.main.url(forAuxiliaryExecutable: "atb")?.path else { return }
         Shell.run(atb, ["hooks", agent]) { [weak self] result in
             Keyboard.copy(result.output)
-            self?.env.alerts.post(kind: AlertKind.custom, source: "menu", title: "已复制 \(agent == "claude" ? "Claude Code" : "Codex") 的 hooks 配置",
-                                  detail: agent == "claude" ? "粘贴到 ~/.claude/settings.json" : "粘贴到 ~/.codex/config.toml",
-                                  icon: "sf:doc.on.clipboard", color: "green")
+            self?.env.alerts.post(
+                kind: AlertKind.custom, source: "menu",
+                title: L("Copied {0} hooks config", agent == "claude" ? "Claude Code" : "Codex"),
+                detail: L("Paste into {0}", agent == "claude" ? "~/.claude/settings.json" : "~/.codex/config.toml"),
+                icon: "sf:doc.on.clipboard", color: "green")
         }
     }
 
@@ -498,7 +538,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 try SMAppService.mainApp.register()
             }
         } catch {
-            Log.error("设置开机启动失败：\(error.localizedDescription)")
+            Log.error("Failed to update launch at login: \(error.localizedDescription)")
         }
     }
 }

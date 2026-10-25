@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>agentTouchbar</string>
 	<key>CFBundleDisplayName</key>
@@ -21,8 +28,8 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>在 Touch Bar 上显示下一个日程，并在会议开始前提醒你。</string>
+	<string>Shows your next event on the Touch Bar and reminds you before meetings start.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>控制 Spotify、浏览器视频和系统外观。</string>
+	<string>Controls Spotify, browser video playback, and system appearance.</string>
 </dict>
 </plist>

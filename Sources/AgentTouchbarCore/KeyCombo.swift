@@ -1,16 +1,18 @@
 import Foundation
 
-/// "cmd+shift+a" 这样的快捷键描述
+/// A shortcut such as "cmd+shift+a".
 public struct KeyCombo: Equatable, Sendable {
     public var command = false
     public var shift = false
     public var option = false
     public var control = false
-    /// macOS 虚拟键码（kVK_*）
+    /// macOS virtual key code (kVK_*)
     public var keyCode: UInt16
 
-    public init(command: Bool = false, shift: Bool = false, option: Bool = false, control: Bool = false,
-                keyCode: UInt16) {
+    public init(
+        command: Bool = false, shift: Bool = false, option: Bool = false, control: Bool = false,
+        keyCode: UInt16
+    ) {
         self.command = command
         self.shift = shift
         self.option = option
@@ -34,7 +36,7 @@ public struct KeyCombo: Equatable, Sendable {
         return combo
     }
 
-    // 美式键盘布局的虚拟键码
+    // Virtual key codes for the US keyboard layout
     static let keyCodes: [String: UInt16] = [
         "a": 0x00, "s": 0x01, "d": 0x02, "f": 0x03, "h": 0x04, "g": 0x05, "z": 0x06, "x": 0x07,
         "c": 0x08, "v": 0x09, "b": 0x0B, "q": 0x0C, "w": 0x0D, "e": 0x0E, "r": 0x0F, "y": 0x10,

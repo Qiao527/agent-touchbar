@@ -1,16 +1,16 @@
-// agentTouchbar 探针
+// agentTouchbar probe
 //
-// 在真机上回答两个问题：
-//   1. 全局显示 Touch Bar 用的私有 API 在这台 Mac 的 macOS 上还能不能用？
-//   2. Touch Bar 闲置熄灭后，程序能不能把它重新点亮？用哪种方法？
+// Answers two questions on real hardware:
+//   1. Do the private APIs for a global Touch Bar still work on this Mac's macOS version?
+//   2. After the Touch Bar dims from inactivity, can a program light it up again? Which method works?
 //
-// 全程自动运行，结果实时写入 ~/Desktop/agentTouchbar-probe.txt。
-// 只调用系统自带的 DFRFoundation / DFRBrightness 私有框架，结束时恢复原状。
+// Runs unattended and writes results live to ~/Desktop/agentTouchbar-probe.txt.
+// Only calls the built-in DFRFoundation / DFRBrightness private frameworks and restores everything at the end.
 
 import AppKit
 import IOKit.pwr_mgt
 
-// MARK: - 报告
+// MARK: - Report
 
 final class Report {
     static let shared = Report()
@@ -34,7 +34,7 @@ final class Report {
 
 func note(_ text: String) { Report.shared.write(text) }
 
-// MARK: - 私有 API
+// MARK: - Private APIs
 
 enum DFR {
     static let foundationHandle = dlopen(
@@ -55,17 +55,18 @@ enum DFR {
     static let setPresence = symbol("DFRElementSetControlStripPresenceForIdentifier", as: SetPresence.self)
     static let setCloseBox = symbol("DFRSystemModalShowsCloseBoxWhenFrontMost", as: SetCloseBox.self)
 
-    // macOS 15.5 上观察到：0x1 = 亮，0x5 = 暗，即 0x4 位表示熄灭（来自 gbili/touchbar-off）
+    // Observed on macOS 15.5: 0x1 = lit, 0x5 = dark, so bit 0x4 means off (from gbili/touchbar-off)
     static var status: Int? { getStatus?() }
     static var isDark: Bool? { status.map { $0 & 0x4 != 0 } }
     static var statusText: String {
-        guard let status else { return "未知（DFRGetStatus 不可用）" }
+        guard let status else { return "unknown (DFRGetStatus unavailable)" }
         let hex = String(status, radix: 16, uppercase: true)
-        return "0x\(hex)（\(status & 0x4 != 0 ? "暗" : "亮")）"
+        return "0x\(hex) (\(status & 0x4 != 0 ? "dark" : "lit"))"
     }
 
-    // NSTouchBar / NSTouchBarItem 上的私有类方法
-    static let selPresentPlacement = NSSelectorFromString("presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
+    // Private class methods on NSTouchBar / NSTouchBarItem
+    static let selPresentPlacement = NSSelectorFromString(
+        "presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
     static let selPresent = NSSelectorFromString("presentSystemModalTouchBar:systemTrayItemIdentifier:")
     static let selDismiss = NSSelectorFromString("dismissSystemModalTouchBar:")
     static let selMinimize = NSSelectorFromString("minimizeSystemModalTouchBar:")
@@ -75,7 +76,7 @@ enum DFR {
         class_getClassMethod(cls, sel) != nil
     }
 
-    /// placement 1 = 占满整条 Touch Bar（包括右侧 Control Strip），MTMR 用的就是这种
+    /// placement 1 = the whole Touch Bar (including the Control Strip on the right); this is what MTMR uses
     static func presentFullWidth(_ bar: NSTouchBar, tray: String) -> Bool {
         guard let method = class_getClassMethod(NSTouchBar.self, selPresentPlacement) else { return false }
         typealias Fn = @convention(c) (AnyObject, Selector, NSTouchBar, Int, NSString) -> Void
@@ -84,7 +85,7 @@ enum DFR {
         return true
     }
 
-    /// 只覆盖左侧"程序区域"，右侧 Control Strip 保留
+    /// Covers only the app region on the left and keeps the Control Strip on the right
     static func presentAppRegion(_ bar: NSTouchBar, tray: String) -> Bool {
         guard hasClassMethod(NSTouchBar.self, selPresent) else { return false }
         _ = (NSTouchBar.self as AnyObject).perform(selPresent, with: bar, with: tray as NSString)
@@ -105,7 +106,7 @@ enum DFR {
         return true
     }
 
-    /// DFRBrightnessClient：TouchBarServer 自己做闲置变暗时用的类
+    /// DFRBrightnessClient: the class TouchBarServer itself uses to dim when idle
     static var brightnessClientAvailable: Bool {
         _ = brightnessHandle
         guard let cls = NSClassFromString("DFRBrightnessClient") as? NSObject.Type else { return false }
@@ -117,37 +118,37 @@ enum DFR {
     static func setPanel(on: Bool) -> String {
         _ = brightnessHandle
         guard let cls = NSClassFromString("DFRBrightnessClient") as? NSObject.Type else {
-            return "失败：找不到 DFRBrightnessClient"
+            return "failed: DFRBrightnessClient not found"
         }
         let client = cls.init()
         let sel = NSSelectorFromString(on ? "turnOn" : "turnOff")
-        guard client.responds(to: sel) else { return "失败：不响应 \(sel)" }
+        guard client.responds(to: sel) else { return "failed: does not respond to \(sel)" }
         typealias Call = @convention(c) (AnyObject, Selector) -> Bool
         let ok = unsafeBitCast(client.method(for: sel), to: Call.self)(client, sel)
-        return ok ? "调用成功" : "调用返回 false"
+        return ok ? "call succeeded" : "call returned false"
     }
 }
 
-/// 公开 API：声明"用户有操作"，系统会像有人碰了键盘一样重置闲置计时
+/// Public API: declare user activity, so the system resets its idle timer as if someone touched the keyboard
 func declareUserActivity() -> String {
     var id: IOPMAssertionID = 0
     let result = IOPMAssertionDeclareUserActivity("agentTouchbar probe" as CFString, kIOPMUserActiveLocal, &id)
     if result == kIOReturnSuccess {
         IOPMAssertionRelease(id)
-        return "调用成功"
+        return "call succeeded"
     }
-    return "调用失败，错误码 \(result)"
+    return "call failed, error code \(result)"
 }
 
 func sysctlString(_ name: String) -> String {
     var size = 0
-    guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return "未知" }
+    guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return "unknown" }
     var buffer = [CChar](repeating: 0, count: size)
-    guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return "未知" }
+    guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return "unknown" }
     return String(cString: buffer)
 }
 
-// MARK: - 测试用的 Touch Bar
+// MARK: - Test Touch Bar
 
 @MainActor
 final class ProbeBar: NSObject {
@@ -155,7 +156,7 @@ final class ProbeBar: NSObject {
     private(set) var tapped = false
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
-    private let button = NSButton(title: "点我", target: nil, action: nil)
+    private let button = NSButton(title: "Tap me", target: nil, action: nil)
 
     override init() {
         super.init()
@@ -186,20 +187,20 @@ final class ProbeBar: NSObject {
     func resetTap() { tapped = false }
 
     @objc private func onTap() {
-        if !tapped { note("  ✅ 收到点击") }
+        if !tapped { note("  ✅ Tap received") }
         tapped = true
-        show("收到点击 ✅", color: .systemGreen)
+        show("Tap received ✅", color: .systemGreen)
     }
 }
 
-// MARK: - 测试流程
+// MARK: - Test sequence
 
 @MainActor
 final class Probe: NSObject, NSApplicationDelegate {
     private let bar = ProbeBar()
     private let trayID = "atb.probe.tray"
     private var results: [String] = []
-    /// 第 2 步里实际可用的显示方式：true = 整条，false = 左侧区域
+    /// Display mode that worked in step 2: true = full width, false = left app region
     private var usesFullWidth = true
 
     private func present() {
@@ -222,7 +223,7 @@ final class Probe: NSObject, NSApplicationDelegate {
         try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
-    /// 每 0.5 秒检查一次条件，同时记录 Touch Bar 状态的每次变化
+    /// Checks the condition every 0.5 s and logs every Touch Bar status change
     private func waitUntil(timeout: Double, _ condition: () -> Bool) async -> Bool {
         let start = Date()
         var lastStatus = DFR.status
@@ -230,7 +231,7 @@ final class Probe: NSObject, NSApplicationDelegate {
             if condition() { return true }
             let status = DFR.status
             if status != lastStatus {
-                note("  状态变化：\(DFR.statusText)，第 \(Int(Date().timeIntervalSince(start))) 秒")
+                note("  Status changed: \(DFR.statusText) at \(Int(Date().timeIntervalSince(start))) s")
                 lastStatus = status
             }
             await wait(0.5)
@@ -244,35 +245,41 @@ final class Probe: NSObject, NSApplicationDelegate {
     }
 
     private func run() async {
-        note("========== agentTouchbar 探针 ==========")
-        note("系统：\(ProcessInfo.processInfo.operatingSystemVersionString)")
-        note("机型：\(sysctlString("hw.model"))")
+        note("========== agentTouchbar probe ==========")
+        note("System: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        note("Model: \(sysctlString("hw.model"))")
         let mode = UserDefaults(suiteName: "com.apple.touchbar.agent")?.string(forKey: "PresentationModeGlobal")
-        note("系统设置里 Touch Bar 显示模式：\(mode ?? "未读取到")")
+        note("Touch Bar mode in System Settings: \(mode ?? "not found")")
 
-        // ---------- 1. 检查私有 API 是否存在 ----------
+        // ---------- 1. Check that the private APIs exist ----------
         note("")
-        note("【1】检查私有 API 是否还在")
+        note("[1] Checking that the private APIs still exist")
         let checks: [(String, Bool)] = [
-            ("DFRFoundation 框架", DFR.foundationHandle != nil),
-            ("DFRBrightness 框架", DFR.brightnessHandle != nil),
+            ("DFRFoundation framework", DFR.foundationHandle != nil),
+            ("DFRBrightness framework", DFR.brightnessHandle != nil),
             ("DFRGetStatus", DFR.getStatus != nil),
             ("DFRElementSetControlStripPresenceForIdentifier", DFR.setPresence != nil),
             ("DFRSystemModalShowsCloseBoxWhenFrontMost", DFR.setCloseBox != nil),
-            ("NSTouchBar presentSystemModalTouchBar:placement:…（整条）", DFR.hasClassMethod(NSTouchBar.self, DFR.selPresentPlacement)),
-            ("NSTouchBar presentSystemModalTouchBar:systemTrayItemIdentifier:（左侧）", DFR.hasClassMethod(NSTouchBar.self, DFR.selPresent)),
+            (
+                "NSTouchBar presentSystemModalTouchBar:placement:… (full width)",
+                DFR.hasClassMethod(NSTouchBar.self, DFR.selPresentPlacement)
+            ),
+            (
+                "NSTouchBar presentSystemModalTouchBar:systemTrayItemIdentifier: (left region)",
+                DFR.hasClassMethod(NSTouchBar.self, DFR.selPresent)
+            ),
             ("NSTouchBar dismissSystemModalTouchBar:", DFR.hasClassMethod(NSTouchBar.self, DFR.selDismiss)),
             ("NSTouchBarItem addSystemTrayItem:", DFR.hasClassMethod(NSTouchBarItem.self, DFR.selAddTray)),
             ("DFRBrightnessClient turnOn / turnOff", DFR.brightnessClientAvailable),
         ]
         for (name, ok) in checks { note("  \(ok ? "✅" : "❌") \(name)") }
-        note("  当前 Touch Bar 状态：\(DFR.statusText)")
+        note("  Current Touch Bar status: \(DFR.statusText)")
         let missing = checks.filter { !$0.1 }.map { $0.0 }
-        result(missing.isEmpty ? "私有 API 全部存在" : "缺少：\(missing.joined(separator: "、"))")
+        result(missing.isEmpty ? "All private APIs present" : "Missing: \(missing.joined(separator: ", "))")
 
-        // ---------- 2. 全局显示 + 触摸 ----------
+        // ---------- 2. Global display + touch ----------
         note("")
-        note("【2】全局显示测试")
+        note("[2] Global display test")
         let tray = NSCustomTouchBarItem(identifier: NSTouchBarItem.Identifier(trayID))
         let trayButton = NSButton(title: "ATB", target: nil, action: nil)
         tray.view = trayButton
@@ -282,103 +289,113 @@ final class Probe: NSObject, NSApplicationDelegate {
         var displayed = false
         if DFR.hasClassMethod(NSTouchBar.self, DFR.selPresentPlacement) {
             usesFullWidth = true
-            bar.show("agentTouchbar 测试：看到这行字，请点右边的按钮 →")
+            bar.show("agentTouchbar test: if you can read this, tap the button on the right →")
             present()
-            note("  已用『整条』方式显示。请在 30 秒内点 Touch Bar 上紫色的『点我』")
+            note("  Shown in full-width mode. Tap the purple 'Tap me' button on the Touch Bar within 30 seconds")
             displayed = await waitUntil(timeout: 30) { bar.tapped }
-            result(displayed ? "整条显示：可用（能显示，也能点）" : "整条显示：30 秒内没有收到点击")
+            result(
+                displayed
+                    ? "Full-width display: works (visible and tappable)"
+                    : "Full-width display: no tap within 30 seconds")
         }
         if !displayed, DFR.hasClassMethod(NSTouchBar.self, DFR.selPresent) {
             DFR.dismiss(bar.touchBar)
             bar.resetTap()
             usesFullWidth = false
-            bar.show("换一种方式：看到这行字，请点右边的按钮 →")
+            bar.show("Trying another mode: if you can read this, tap the button on the right →")
             present()
-            note("  改用『左侧区域』方式显示。请在 30 秒内点『点我』")
+            note("  Switched to left-region mode. Tap 'Tap me' within 30 seconds")
             displayed = await waitUntil(timeout: 30) { bar.tapped }
-            result(displayed ? "左侧区域显示：可用" : "左侧区域显示：30 秒内没有收到点击")
+            result(displayed ? "Left-region display: works" : "Left-region display: no tap within 30 seconds")
         }
         guard displayed else {
-            result("无法确认全局显示可用，后面的测试跳过")
+            result("Could not confirm the global display works; skipping the remaining tests")
             return
         }
         await wait(1.5)
 
-        // ---------- 3. 强制熄灭再点亮 ----------
+        // ---------- 3. Force off, then back on ----------
         note("")
-        note("【3】强制熄灭再点亮（3 秒后 Touch Bar 会黑一下，不用操作）")
-        bar.show("3 秒后会熄灭一下，然后自动亮起", color: .systemYellow)
+        note("[3] Force off, then back on (the Touch Bar goes dark briefly in 3 seconds; no action needed)")
+        bar.show("Turning off in 3 seconds, then back on automatically", color: .systemYellow)
         await wait(3)
-        note("  熄灭：\(DFR.setPanel(on: false))")
+        note("  Off: \(DFR.setPanel(on: false))")
         await wait(2)
-        note("  熄灭后状态：\(DFR.statusText)")
-        bar.show("如果你看到这行字，说明程序成功点亮了 Touch Bar", color: .systemGreen)
-        note("  点亮：\(DFR.setPanel(on: true))")
+        note("  Status after off: \(DFR.statusText)")
+        bar.show("If you can read this, the program turned the Touch Bar back on", color: .systemGreen)
+        note("  On: \(DFR.setPanel(on: true))")
         await wait(1.5)
-        note("  点亮后状态：\(DFR.statusText)")
-        result(DFR.isDark == false ? "DFRBrightnessClient 能熄灭并点亮" : "DFRBrightnessClient 点亮失败")
+        note("  Status after on: \(DFR.statusText)")
+        result(
+            DFR.isDark == false
+                ? "DFRBrightnessClient can turn it off and on" : "DFRBrightnessClient failed to turn it on")
         await wait(2)
 
-        // ---------- 4. 自然熄灭后能否唤醒 ----------
+        // ---------- 4. Wake after natural idle dimming ----------
         note("")
-        note("【4】自然熄灭后唤醒（这一步最关键）")
-        note("  ⚠️ 现在请完全不要碰键盘和触控板，Touch Bar 大约 1 分钟后会自己变暗熄灭。最多等 3 分钟。")
-        bar.show("请不要碰键盘和触控板，等我自己熄灭…", color: .secondaryLabelColor)
+        note("[4] Wake after idle dimming (the most important step)")
+        note(
+            "  ⚠️ Do not touch the keyboard or trackpad now. The Touch Bar should dim and turn off by itself in about 1 minute. Waiting up to 3 minutes."
+        )
+        bar.show("Hands off the keyboard and trackpad, waiting for me to turn off…", color: .secondaryLabelColor)
         let start = Date()
         let wentDark = await waitUntil(timeout: 180) { DFR.isDark == true }
         guard wentDark else {
-            result("180 秒内没有熄灭，可能中途碰了键盘或触控板。可以重新运行再测一次")
+            result(
+                "Did not turn off within 180 seconds; the keyboard or trackpad was probably touched. Run it again to retry"
+            )
             return
         }
-        note("  闲置 \(Int(Date().timeIntervalSince(start))) 秒后熄灭")
+        note("  Turned off after \(Int(Date().timeIntervalSince(start))) s idle")
         await wait(5)
 
-        // 4a：只更新内容（最理想：什么都不用做）
-        bar.show("🔔 新提醒（只更新了内容）", color: .systemOrange)
+        // 4a: only update the content (ideal: nothing else needed)
+        bar.show("🔔 New alert (content updated only)", color: .systemOrange)
         await wait(2)
         var woke = DFR.isDark == false
-        result("方法 A 只更新内容：\(woke ? "能唤醒" : "不能唤醒")")
+        result("Method A, update content only: \(woke ? "wakes" : "does not wake")")
 
-        // 4b：重新调用一次全局显示
+        // 4b: call the global display again
         if !woke {
-            bar.show("🔔 新提醒（重新显示了一次）", color: .systemOrange)
+            bar.show("🔔 New alert (presented again)", color: .systemOrange)
             present()
             await wait(2)
             woke = DFR.isDark == false
-            result("方法 B 重新显示：\(woke ? "能唤醒" : "不能唤醒")")
+            result("Method B, present again: \(woke ? "wakes" : "does not wake")")
         }
 
-        // 4c：公开 API，声明有用户操作（副作用：主屏幕如果暗了也会亮）
+        // 4c: public API, declare user activity (side effect: also wakes the main display if it dimmed)
         if !woke {
-            bar.show("🔔 新提醒（声明了用户操作）", color: .systemOrange)
+            bar.show("🔔 New alert (declared user activity)", color: .systemOrange)
             note("  \(declareUserActivity())")
             await wait(2)
             woke = DFR.isDark == false
-            result("方法 C IOPMAssertionDeclareUserActivity：\(woke ? "能唤醒" : "不能唤醒")")
+            result("Method C, IOPMAssertionDeclareUserActivity: \(woke ? "wakes" : "does not wake")")
         }
 
-        // 4d：私有 API 直接点亮
+        // 4d: turn it on directly with the private API
         if !woke {
-            bar.show("🔔 新提醒（用私有 API 点亮）", color: .systemOrange)
+            bar.show("🔔 New alert (turned on with private API)", color: .systemOrange)
             note("  \(DFR.setPanel(on: true))")
             await wait(2)
             woke = DFR.isDark == false
-            result("方法 D DFRBrightnessClient turnOn：\(woke ? "能唤醒" : "不能唤醒")")
+            result("Method D, DFRBrightnessClient turnOn: \(woke ? "wakes" : "does not wake")")
         }
 
         guard woke else {
-            result("所有方法都没能唤醒")
+            result("No method woke it")
             return
         }
 
-        // 唤醒后能亮多久（决定提醒要不要定期重新点亮）
-        note("  继续别碰键盘，测一下唤醒后能亮多久（最多 2 分钟）")
-        bar.show("唤醒成功 ✅ 继续别碰，测一下能亮多久", color: .systemGreen)
+        // How long it stays lit after waking (decides whether alerts need to re-light it periodically)
+        note("  Keep hands off the keyboard; measuring how long it stays lit after waking (up to 2 minutes)")
+        bar.show("Woke up ✅ Keep hands off, measuring how long it stays lit", color: .systemGreen)
         let litAt = Date()
         let darkAgain = await waitUntil(timeout: 120) { DFR.isDark == true }
-        result(darkAgain
-            ? "唤醒后亮了 \(Int(Date().timeIntervalSince(litAt))) 秒又熄灭"
-            : "唤醒后 2 分钟内一直亮着（或者中途被碰了）")
+        result(
+            darkAgain
+                ? "Stayed lit for \(Int(Date().timeIntervalSince(litAt))) s after waking, then turned off"
+                : "Stayed lit for 2 minutes after waking (or was touched in the meantime)")
     }
 
     private func cleanUp() {
@@ -386,10 +403,10 @@ final class Probe: NSObject, NSApplicationDelegate {
         DFR.setPresence?(trayID as NSString, false)
         _ = DFR.setPanel(on: true)
         note("")
-        note("========== 结论 ==========")
+        note("========== Summary ==========")
         for line in results { note("• \(line)") }
-        note("报告已保存：\(Report.shared.url.path)")
-        note("请把这个文件的内容复制给 Kiro。")
+        note("Report saved: \(Report.shared.url.path)")
+        note("Paste the contents of this file to Kiro.")
     }
 }
 

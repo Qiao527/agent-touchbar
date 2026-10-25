@@ -1,8 +1,8 @@
 // swift-tools-version: 5.10
 import PackageDescription
 
-// AgentTouchbarCore 和 atb 只依赖 Foundation，可以在 Linux 上编译和测试。
-// AgentTouchbar（菜单栏程序）依赖 AppKit，只在 macOS 上加入。
+// AgentTouchbarCore and atb depend only on Foundation, so they build and test on Linux.
+// The AgentTouchbar menu bar app depends on AppKit and is added on macOS only.
 var targets: [Target] = [
     .target(
         name: "AgentTouchbarCore",
@@ -19,23 +19,23 @@ var targets: [Target] = [
 ]
 
 var products: [Product] = [
-    .executable(name: "atb", targets: ["atb"]),
+    .executable(name: "atb", targets: ["atb"])
 ]
 
 #if os(macOS)
-targets.append(
-    .executableTarget(
-        name: "AgentTouchbar",
-        dependencies: ["AgentTouchbarCore"],
-        linkerSettings: [
-            .linkedLibrary("sqlite3"),
-            .linkedFramework("EventKit"),
-            .linkedFramework("CoreAudio"),
-            .linkedFramework("IOKit"),
-        ]
+    targets.append(
+        .executableTarget(
+            name: "AgentTouchbar",
+            dependencies: ["AgentTouchbarCore"],
+            linkerSettings: [
+                .linkedLibrary("sqlite3"),
+                .linkedFramework("EventKit"),
+                .linkedFramework("CoreAudio"),
+                .linkedFramework("IOKit"),
+            ]
+        )
     )
-)
-products.append(.executable(name: "AgentTouchbar", targets: ["AgentTouchbar"]))
+    products.append(.executable(name: "AgentTouchbar", targets: ["AgentTouchbar"]))
 #endif
 
 let package = Package(
@@ -43,7 +43,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: products,
     dependencies: [
-        .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
+        .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0")
     ],
     targets: targets
 )

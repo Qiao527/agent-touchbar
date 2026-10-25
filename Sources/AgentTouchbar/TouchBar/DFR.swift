@@ -1,8 +1,8 @@
 import AppKit
 import IOKit.pwr_mgt
 
-/// 唯一调用私有 API 的地方。全部通过 dlsym 和 selector 动态查找：
-/// 系统更新后某个接口不见了，程序会降级而不是崩溃。
+/// The only place that touches private API. Everything is looked up at runtime via dlsym and selectors,
+/// so if an OS update removes something, the app degrades instead of crashing.
 @MainActor
 enum DFR {
     private nonisolated(unsafe) static let foundation = dlopen(
@@ -23,7 +23,8 @@ enum DFR {
     private static let setPresence = symbol("DFRElementSetControlStripPresenceForIdentifier", as: SetPresence.self)
     private static let setCloseBox = symbol("DFRSystemModalShowsCloseBoxWhenFrontMost", as: SetCloseBox.self)
 
-    private static let selPresentPlacement = NSSelectorFromString("presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
+    private static let selPresentPlacement = NSSelectorFromString(
+        "presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
     private static let selPresent = NSSelectorFromString("presentSystemModalTouchBar:systemTrayItemIdentifier:")
     private static let selDismiss = NSSelectorFromString("dismissSystemModalTouchBar:")
     private static let selMinimize = NSSelectorFromString("minimizeSystemModalTouchBar:")
@@ -37,7 +38,7 @@ enum DFR {
         hasClassMethod(NSTouchBar.self, selPresentPlacement) || hasClassMethod(NSTouchBar.self, selPresent)
     }
 
-    /// nil 表示无法读取
+    /// nil means the status could not be read.
     static var isDark: Bool? { getStatus.map { $0() & 0x4 != 0 } }
 
     static func addTrayItem(_ item: NSTouchBarItem) {
@@ -53,7 +54,7 @@ enum DFR {
         setCloseBox?(visible)
     }
 
-    /// fullWidth 为 true 时占满整条 Touch Bar；不支持时退回只占左侧区域
+    /// With fullWidth, the bar spans the whole Touch Bar; falls back to the left region when unsupported.
     @discardableResult
     static func present(_ bar: NSTouchBar, tray: NSTouchBarItem.Identifier, fullWidth: Bool) -> Bool {
         if fullWidth, let method = class_getClassMethod(NSTouchBar.self, selPresentPlacement) {
@@ -77,7 +78,7 @@ enum DFR {
         }
     }
 
-    /// DFRBrightnessClient 是系统自己做闲置变暗时用的类
+    /// DFRBrightnessClient is the class the system itself uses for idle dimming.
     @discardableResult
     static func turnPanelOn() -> Bool {
         _ = brightness
@@ -89,10 +90,12 @@ enum DFR {
         return unsafeBitCast(client.method(for: sel), to: Call.self)(client, sel)
     }
 
-    /// 公开 API：声明有用户操作，重置闲置计时
+    /// Public API: declares user activity, which resets the idle timer.
     static func declareUserActivity() {
         var id: IOPMAssertionID = 0
-        if IOPMAssertionDeclareUserActivity("agentTouchbar alert" as CFString, kIOPMUserActiveLocal, &id) == kIOReturnSuccess {
+        if IOPMAssertionDeclareUserActivity("agentTouchbar alert" as CFString, kIOPMUserActiveLocal, &id)
+            == kIOReturnSuccess
+        {
             IOPMAssertionRelease(id)
         }
     }

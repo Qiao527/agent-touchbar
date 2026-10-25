@@ -1,12 +1,12 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 import CoreAudio
 import IOKit.ps
 
-// MARK: - 配置
+// MARK: - Config
 
-/// 读取配置文件，每秒检查一次修改时间，改动后自动重新加载。
-/// 新配置有错误时继续用上一份，并通过 lastError 报告。
+/// Loads the config file and checks its modification time every second, reloading on change.
+/// If the new config is invalid, the previous one stays in effect and the error is reported via lastError.
 @MainActor
 final class ConfigStore {
     private(set) var config: AppConfig = .default
@@ -19,9 +19,10 @@ final class ConfigStore {
     func start() {
         let url = Paths.configFile
         if !FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? DefaultConfig.yaml.write(to: url, atomically: true, encoding: .utf8)
-            Log.info("已生成默认配置：\(url.path)")
+            Log.info("Wrote default config: \(url.path)")
         }
         reload(force: true)
         timer = repeatingTimer(1, fireNow: false) { [weak self] in self?.reload(force: false) }
@@ -36,11 +37,11 @@ final class ConfigStore {
             let text = try String(contentsOf: url, encoding: .utf8)
             config = try AppConfig.parse(yaml: text)
             lastError = nil
-            Log.info("配置已加载")
+            Log.info("Config loaded")
             onChange?(config)
         } catch {
             lastError = Self.describe(error)
-            Log.error("配置文件错误：\(lastError ?? "")")
+            Log.error("Config file error: \(lastError ?? "")")
         }
         onError?(lastError)
     }
@@ -50,7 +51,7 @@ final class ConfigStore {
             switch decoding {
             case .dataCorrupted(let c), .keyNotFound(_, let c), .typeMismatch(_, let c), .valueNotFound(_, let c):
                 let path = c.codingPath.map(\.stringValue).joined(separator: ".")
-                return path.isEmpty ? c.debugDescription : "\(path)：\(c.debugDescription)"
+                return path.isEmpty ? c.debugDescription : "\(path): \(c.debugDescription)"
             @unknown default:
                 break
             }
@@ -59,7 +60,7 @@ final class ConfigStore {
     }
 }
 
-// MARK: - 提醒
+// MARK: - Alerts
 
 @MainActor
 final class AlertCenter {
@@ -68,9 +69,9 @@ final class AlertCenter {
     private var timer: Timer?
     var config: AppConfig = .default
     var onChange: (() -> Void)?
-    /// 有新提醒（不是更新）时调用，用来唤醒 Touch Bar
+    /// Called for new alerts (not updates); used to wake the Touch Bar.
     var onNewAlert: (() -> Void)?
-    /// 当前展示第几条
+    /// Index of the alert currently shown.
     private(set) var focusedIndex = 0
 
     func start() {
@@ -82,19 +83,22 @@ final class AlertCenter {
         return queue.alerts[min(focusedIndex, queue.count - 1)]
     }
 
-    /// 发布提醒。handler 收到被点击的动作 id；"tap" 表示点了正文
-    func post(kind: String, id: String? = nil, source: String, title: String, detail: String? = nil,
-              icon: String? = nil, color: String? = nil, actions: [AlertAction] = [], tapAction: String? = nil,
-              payload: [String: String] = [:], priority: Int? = nil, ttl: Double? = nil,
-              handler: ((String) -> Void)? = nil) {
+    /// Posts an alert. The handler receives the tapped action id; "tap" means the body text was tapped.
+    func post(
+        kind: String, id: String? = nil, source: String, title: String, detail: String? = nil,
+        icon: String? = nil, color: String? = nil, actions: [AlertAction] = [], tapAction: String? = nil,
+        payload: [String: String] = [:], priority: Int? = nil, ttl: Double? = nil,
+        handler: ((String) -> Void)? = nil
+    ) {
         let rule = config.alertRule(for: kind)
         guard rule.enabled else { return }
         let now = Date()
         var expiry = rule.expiry(from: now)
         if let ttl, !rule.sticky { expiry = ttl > 0 ? now.addingTimeInterval(ttl) : nil }
-        let alert = Alert(id: id ?? UUID().uuidString, kind: kind, source: source, title: title, detail: detail,
-                          icon: icon, color: color, priority: priority ?? rule.priority, createdAt: now,
-                          expiresAt: expiry, actions: actions, tapAction: tapAction, payload: payload)
+        let alert = Alert(
+            id: id ?? UUID().uuidString, kind: kind, source: source, title: title, detail: detail,
+            icon: icon, color: color, priority: priority ?? rule.priority, createdAt: now,
+            expiresAt: expiry, actions: actions, tapAction: tapAction, payload: payload)
         if let handler { handlers[alert.id] = handler }
         let isNew = queue.push(alert)
         if isNew, queue.top?.id == alert.id { focusedIndex = 0 }
@@ -138,7 +142,7 @@ final class AlertCenter {
         let expired = queue.prune(at: Date())
         guard !expired.isEmpty else { return }
         for alert in expired {
-            // 过期也通知一下，例如权限请求超时要交回终端
+            // Notify on expiry too, e.g. a timed-out permission request hands control back to the terminal.
             handlers[alert.id]?("expired")
             handlers[alert.id] = nil
         }
@@ -151,7 +155,7 @@ final class AlertCenter {
     }
 }
 
-// MARK: - 环境（前台程序、麦克风）
+// MARK: - Context (frontmost app, microphone)
 
 @MainActor
 final class ContextMonitor {
@@ -183,7 +187,7 @@ final class ContextMonitor {
             inMeeting: inMeeting(),
             date: Date()
         )
-        // 时间每次都不同，比较时只看到分钟
+        // The time always differs, so compare only down to the minute.
         let minute = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: next.date)
         let oldMinute = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: context.date)
         if minute == oldMinute { next.date = context.date }
@@ -193,7 +197,7 @@ final class ContextMonitor {
     }
 }
 
-// MARK: - 音频（CoreAudio）
+// MARK: - Audio (CoreAudio)
 
 enum Audio {
     struct Device: Equatable {
@@ -201,8 +205,10 @@ enum Audio {
         var name: String
     }
 
-    private static func address(_ selector: AudioObjectPropertySelector,
-                                scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+    private static func address(
+        _ selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
     }
 
@@ -210,11 +216,12 @@ enum Audio {
         var address = address(selector)
         var device = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
-        let status = AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &device)
         return status == noErr && device != 0 ? device : nil
     }
 
-    /// 默认麦克风是否正被某个程序使用（开会的信号之一）
+    /// Whether the default microphone is in use by any app (one signal that a meeting is in progress).
     static func isInputInUse() -> Bool {
         guard let device = defaultDevice(kAudioHardwarePropertyDefaultInputDevice) else { return false }
         var address = address(kAudioDevicePropertyDeviceIsRunningSomewhere)
@@ -227,11 +234,14 @@ enum Audio {
     static func outputDevices() -> [Device] {
         var address = address(kAudioHardwarePropertyDevices)
         var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr else {
+        guard AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size) == noErr
+        else {
             return []
         }
         var ids = [AudioDeviceID](repeating: 0, count: Int(size) / MemoryLayout<AudioDeviceID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr else {
+        guard
+            AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &ids) == noErr
+        else {
             return []
         }
         return ids.compactMap { id in
@@ -240,7 +250,7 @@ enum Audio {
             guard AudioObjectGetPropertyDataSize(id, &streams, 0, nil, &streamSize) == noErr, streamSize > 0 else {
                 return nil
             }
-            return Device(id: id, name: name(of: id) ?? "设备 \(id)")
+            return Device(id: id, name: name(of: id) ?? L("Device {0}", id))
         }
     }
 
@@ -249,7 +259,8 @@ enum Audio {
         var name: Unmanaged<CFString>?
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &name) == noErr,
-              let value = name?.takeRetainedValue() else { return nil }
+            let value = name?.takeRetainedValue()
+        else { return nil }
         return value as String
     }
 
@@ -264,9 +275,11 @@ enum Audio {
         }
     }
 
-    /// 0–100；用 AppleScript 读写，兼容所有输出设备
+    /// 0–100. Read and written via AppleScript so it works with every output device.
     static func volume(_ completion: @escaping @MainActor (Int?, Bool) -> Void) {
-        Shell.osascript("set s to get volume settings\nreturn (output volume of s as string) & \",\" & (output muted of s as string)") { result in
+        Shell.osascript(
+            "set s to get volume settings\nreturn (output volume of s as string) & \",\" & (output muted of s as string)"
+        ) { result in
             let parts = result.output.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: ",")
             completion(parts.first.flatMap { Int($0) }, parts.last == "true")
         }
@@ -281,7 +294,7 @@ enum Audio {
     }
 }
 
-// MARK: - 电量
+// MARK: - Battery
 
 @MainActor
 final class BatteryService {
@@ -303,11 +316,14 @@ final class BatteryService {
 
     func update() {
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else { return }
+            let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef]
+        else { return }
         for source in list {
-            guard let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
-                  let current = description[kIOPSCurrentCapacityKey] as? Int,
-                  let max = description[kIOPSMaxCapacityKey] as? Int, max > 0 else { continue }
+            guard
+                let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any],
+                let current = description[kIOPSCurrentCapacityKey] as? Int,
+                let max = description[kIOPSMaxCapacityKey] as? Int, max > 0
+            else { continue }
             let percent = current * 100 / max
             let onBattery = (description[kIOPSPowerSourceStateKey] as? String) == kIOPSBatteryPowerValue
             let charging = (description[kIOPSIsChargingKey] as? Bool) ?? false
@@ -324,12 +340,12 @@ final class BatteryService {
     }
 }
 
-// MARK: - CPU 和内存
+// MARK: - CPU and memory
 
 @MainActor
 final class SystemStats {
-    private(set) var cpu: Double = 0       // 0–1
-    private(set) var memory: Double = 0    // 0–1
+    private(set) var cpu: Double = 0  // 0–1
+    private(set) var memory: Double = 0  // 0–1
     private var previous: host_cpu_load_info?
     private var timer: Timer?
 

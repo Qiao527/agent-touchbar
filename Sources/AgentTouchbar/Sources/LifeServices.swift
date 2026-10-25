@@ -1,5 +1,5 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 import EventKit
 
 // MARK: - Spotify
@@ -26,7 +26,7 @@ final class SpotifyService {
     }
 
     private func poll() {
-        // 只有 Spotify 在运行时才询问，避免 AppleScript 把它启动起来
+        // Only query while Spotify is running, so AppleScript does not launch it.
         guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").first != nil else {
             if track != nil {
                 track = nil
@@ -35,15 +35,16 @@ final class SpotifyService {
             return
         }
         let script = """
-        tell application "Spotify"
-            set t to current track
-            return (player state as string) & linefeed & (name of t) & linefeed & (artist of t) & linefeed & (artwork url of t)
-        end tell
-        """
+            tell application "Spotify"
+                set t to current track
+                return (player state as string) & linefeed & (name of t) & linefeed & (artist of t) & linefeed & (artwork url of t)
+            end tell
+            """
         Shell.osascript(script) { [weak self] result in
             guard let self else { return }
             let lines = result.output.trimmingCharacters(in: .newlines).components(separatedBy: "\n")
-            let next = lines.count >= 4
+            let next =
+                lines.count >= 4
                 ? Track(playing: lines[0] == "playing", name: lines[1], artist: lines[2], artworkURL: lines[3])
                 : nil
             guard next != self.track else { return }
@@ -54,7 +55,9 @@ final class SpotifyService {
     }
 
     private func loadArtwork() {
-        guard let urlString = track?.artworkURL, urlString != artworkFor, let url = URL(string: urlString) else { return }
+        guard let urlString = track?.artworkURL, urlString != artworkFor, let url = URL(string: urlString) else {
+            return
+        }
         artworkFor = urlString
         URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
             guard let data, let image = NSImage(data: data) else { return }
@@ -71,7 +74,7 @@ final class SpotifyService {
     }
 }
 
-// MARK: - 日历
+// MARK: - Calendar
 
 @MainActor
 final class CalendarService {
@@ -97,11 +100,12 @@ final class CalendarService {
             onMain {
                 guard let self else { return }
                 self.authorized = granted
-                if !granted { Log.error("没有日历权限：\(error?.localizedDescription ?? "用户拒绝")") }
+                if !granted { Log.error("No calendar access: \(error?.localizedDescription ?? "denied by user")") }
                 self.timer = repeatingTimer(30) { [weak self] in self?.refresh() }
             }
         }
-        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) { [weak self] _ in
+        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) {
+            [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
     }
@@ -109,15 +113,17 @@ final class CalendarService {
     func refresh() {
         guard authorized else { return }
         let now = Date()
-        let predicate = store.predicateForEvents(withStart: now.addingTimeInterval(-3 * 3600),
-                                                 end: now.addingTimeInterval(24 * 3600), calendars: nil)
+        let predicate = store.predicateForEvents(
+            withStart: now.addingTimeInterval(-3 * 3600),
+            end: now.addingTimeInterval(24 * 3600), calendars: nil)
         let events = store.events(matching: predicate)
             .filter { !$0.isAllDay && $0.endDate > now && $0.status != .canceled }
             .sorted { $0.startDate < $1.startDate }
             .map { event in
-                Event(id: (event.eventIdentifier ?? UUID().uuidString) + "\(event.startDate.timeIntervalSince1970)",
-                      title: event.title ?? "（无标题）", start: event.startDate, end: event.endDate,
-                      link: MeetingLink.find(in: [event.url?.absoluteString, event.location, event.notes]))
+                Event(
+                    id: (event.eventIdentifier ?? UUID().uuidString) + "\(event.startDate.timeIntervalSince1970)",
+                    title: event.title ?? L("(No title)"), start: event.startDate, end: event.endDate,
+                    link: MeetingLink.find(in: [event.url?.absoluteString, event.location, event.notes]))
             }
         if events != upcoming {
             upcoming = events
@@ -134,11 +140,11 @@ final class CalendarService {
 
     var current: Event? { upcoming.first { $0.start <= Date() && $0.end > Date() } }
     var next: Event? { upcoming.first { $0.start > Date() } }
-    /// 正在进行、带会议链接的日程
+    /// True when the current event has a meeting link.
     var inMeeting: Bool { current?.link != nil }
 }
 
-// MARK: - 剪贴板
+// MARK: - Clipboard
 
 @MainActor
 final class ClipboardService {
@@ -175,17 +181,19 @@ final class ClipboardService {
     }
 }
 
-// MARK: - 下载完成
+// MARK: - Finished downloads
 
 @MainActor
 final class DownloadsWatcher {
     private var known: Set<String> = []
-    private var pending: [String: Int] = [:]   // 文件名 → 上次看到的大小
+    private var pending: [String: Int] = [:]  // file name → last seen size
     private var timer: Timer?
     private var path = ""
     var onFinished: ((URL) -> Void)?
 
-    private static let temporaryExtensions: Set<String> = ["crdownload", "download", "part", "tmp", "partial", "opdownload"]
+    private static let temporaryExtensions: Set<String> = [
+        "crdownload", "download", "part", "tmp", "partial", "opdownload",
+    ]
 
     func start(path: String) {
         stop()
@@ -209,7 +217,7 @@ final class DownloadsWatcher {
             if Self.temporaryExtensions.contains(ext) { continue }
             let url = URL(fileURLWithPath: path).appendingPathComponent(name)
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int ?? -1
-            // 连续两次大小不变才算下载完成
+            // A download counts as finished once its size is unchanged across two checks.
             if pending[name] == size {
                 pending[name] = nil
                 known.insert(name)
@@ -221,7 +229,7 @@ final class DownloadsWatcher {
     }
 }
 
-// MARK: - 天气
+// MARK: - Weather
 
 @MainActor
 final class WeatherService {
@@ -249,7 +257,7 @@ final class WeatherService {
     }
 }
 
-// MARK: - 蓝牙耳机电量
+// MARK: - Bluetooth headphone battery
 
 @MainActor
 final class BluetoothService {
@@ -262,7 +270,7 @@ final class BluetoothService {
 
     func start() {
         guard timer == nil else { return }
-        // system_profiler 比较慢，5 分钟查一次就够了
+        // system_profiler is slow; checking every 5 minutes is enough.
         timer = repeatingTimer(300) { [weak self] in self?.refresh() }
     }
 
@@ -283,9 +291,11 @@ final class BluetoothService {
         }
     }
 
-    /// 优先显示 AirPods / Beats
+    /// Prefers AirPods / Beats.
     var headphones: BluetoothBattery? {
-        devices.first { $0.device.localizedCaseInsensitiveContains("airpods") || $0.device.localizedCaseInsensitiveContains("beats") }
+        devices.first {
+            $0.device.localizedCaseInsensitiveContains("airpods") || $0.device.localizedCaseInsensitiveContains("beats")
+        }
             ?? devices.first { $0.levels["left"] != nil }
     }
 }

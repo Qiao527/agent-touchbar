@@ -1,14 +1,14 @@
 import Foundation
 
-/// 提醒上的一个按钮
+/// A button on an alert.
 public struct AlertAction: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
-    /// 颜色名：green / red / orange / blue / purple / gray，或 #RRGGBB
+    /// Color name (green / red / orange / blue / purple / gray) or #RRGGBB
     public var color: String?
-    /// 点击后执行的 shell 命令（可选）
+    /// Optional shell command to run on tap
     public var run: String?
-    /// 点击后是否关闭这条提醒
+    /// Whether tapping dismisses the alert
     public var dismisses: Bool
 
     public init(id: String, title: String, color: String? = nil, run: String? = nil, dismisses: Bool = true) {
@@ -37,22 +37,24 @@ public struct Alert: Identifiable, Equatable, Sendable {
     public var source: String
     public var title: String
     public var detail: String?
-    /// `sf:符号名` 或图片路径
+    /// `sf:<symbol name>` or an image path
     public var icon: String?
     public var color: String?
     public var priority: Int
     public var createdAt: Date
     public var expiresAt: Date?
     public var actions: [AlertAction]
-    /// 点击提醒正文时执行的动作 id
+    /// Action id to run when the alert body is tapped
     public var tapAction: String?
-    /// 附带数据，例如验证码本身、会议链接
+    /// Extra data, e.g. the verification code or a meeting link
     public var payload: [String: String]
 
-    public init(id: String = UUID().uuidString, kind: String, source: String, title: String,
-                detail: String? = nil, icon: String? = nil, color: String? = nil, priority: Int = 50,
-                createdAt: Date = Date(), expiresAt: Date? = nil, actions: [AlertAction] = [],
-                tapAction: String? = nil, payload: [String: String] = [:]) {
+    public init(
+        id: String = UUID().uuidString, kind: String, source: String, title: String,
+        detail: String? = nil, icon: String? = nil, color: String? = nil, priority: Int = 50,
+        createdAt: Date = Date(), expiresAt: Date? = nil, actions: [AlertAction] = [],
+        tapAction: String? = nil, payload: [String: String] = [:]
+    ) {
         self.id = id
         self.kind = kind
         self.source = source
@@ -74,13 +76,13 @@ public struct Alert: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 提醒队列：按优先级排序，自动过期。同一个 id 再次发送会替换旧的。
+/// Alert queue sorted by priority, with automatic expiry. Pushing an existing id replaces the old alert.
 public struct AlertQueue: Equatable, Sendable {
     public private(set) var alerts: [Alert] = []
 
     public init() {}
 
-    /// 返回 true 表示这是一条新提醒（不是更新），程序可以借此决定是否唤醒 Touch Bar
+    /// Returns true for a new alert (not an update), so the caller can decide whether to wake the Touch Bar.
     @discardableResult
     public mutating func push(_ alert: Alert) -> Bool {
         if let index = alerts.firstIndex(where: { $0.id == alert.id }) {
@@ -103,7 +105,7 @@ public struct AlertQueue: Equatable, Sendable {
         alerts.removeAll(where: predicate)
     }
 
-    /// 删除过期提醒，返回被删除的提醒
+    /// Removes expired alerts and returns them.
     @discardableResult
     public mutating func prune(at date: Date) -> [Alert] {
         let expired = alerts.filter { $0.isExpired(at: date) }
@@ -117,11 +119,11 @@ public struct AlertQueue: Equatable, Sendable {
 
     public func alert(id: String) -> Alert? { alerts.first { $0.id == id } }
 
-    /// 下一个过期时间，用来安排定时器
+    /// Next expiry time, used to schedule a timer.
     public var nextExpiry: Date? { alerts.compactMap(\.expiresAt).min() }
 
     private mutating func sort() {
-        // 优先级高的在前；同优先级时新的在前
+        // Higher priority first; newest first within the same priority
         alerts.sort {
             if $0.priority != $1.priority { return $0.priority > $1.priority }
             return $0.createdAt > $1.createdAt
