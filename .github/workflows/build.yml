@@ -1,0 +1,40 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  core-linux:
+    # 核心逻辑在 Linux 上测试，便宜又快
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+
+  macos:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift 版本
+        run: swift --version
+      - name: 单元测试
+        run: swift test
+      - name: 编译并打包 app
+        run: ./scripts/build-app.sh
+      - name: 编译探针
+        run: swiftc -O probe/main.swift -o build/ATBProbe
+      - name: 检查 atb
+        run: |
+          build/agentTouchbar.app/Contents/MacOS/atb --help
+          build/agentTouchbar.app/Contents/MacOS/atb hooks claude | tail -n +2 | python3 -m json.tool > /dev/null
+          echo '{"hook_event_name":"Stop","session_id":"ci"}' | build/agentTouchbar.app/Contents/MacOS/atb hook claude
+      - name: 打包
+        run: cd build && ditto -c -k --keepParent agentTouchbar.app agentTouchbar.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentTouchbar
+          path: build/agentTouchbar.zip

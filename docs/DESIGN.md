@@ -359,28 +359,26 @@ Chrome 和 Safari 都能通过 AppleScript 执行网页里的 JavaScript（需�
 | 自动化 | 控制 Spotify、浏览器、System Events | 系统自动弹窗 |
 | 日历 | 读取日程 | 开启日程组件时 |
 
-**注意**：这些权限和程序的签名绑定。如果每次编译签名都变，权限会失效需要重新授权。建议在 Xcode 里用你的 Apple ID（免费的个人团队即可）签名，签名身份就会保持稳定。
+**注意**：这些权限和程序的签名绑定。ad-hoc 签名每次编译都会变，权限需要重新授权。用固定的签名证书（例如 Xcode 里 Apple ID 免费个人团队生成的 Apple Development 证书）可以避免这个问题。
 
 ## 9. 项目结构
 
+改用 Swift Package Manager，不再使用 XcodeGen：不需要完整的 Xcode，只要命令行工具就能编译；GitHub Actions 也能直接在 macOS 上编译和打包。
+
 ```
 agentTouchbar/
-├── project.yml                 # XcodeGen 配置，用它生成 .xcodeproj
-├── App/                        # 菜单栏程序入口、设置窗口
-├── TouchBar/                   # 私有 API 桥接、布局、动画
-├── Widgets/                    # 内置组件，每个组件一个文件
-├── Sources/                    # 各个数据源
-├── Packages/
-│   └── AgentTouchbarCore/      # 不依赖 AppKit 的核心逻辑（可在 Linux 上测试）
-├── CLI/                        # atb 命令行工具
-├── hooks/                      # Claude Code 和 Codex 的配置示例
-├── config/
-│   └── config.example.yaml
-└── docs/
-    └── DESIGN.md
+├── Package.swift
+├── Sources/
+│   ├── AgentTouchbarCore/      # 不依赖 AppKit 的核心逻辑（可在 Linux 上测试）
+│   ├── atb/                    # atb 命令行工具
+│   └── AgentTouchbar/          # 菜单栏程序（App、TouchBar、Sources、Widgets、Support）
+├── Tests/AgentTouchbarCoreTests/
+├── Resources/Info.plist
+├── scripts/                    # build-app.sh 打包，install.sh 安装
+├── probe/                      # 探针
+├── config/config.example.yaml  # 和内置默认配置保持一致（有测试检查）
+└── .github/workflows/build.yml # Linux 跑核心测试；macOS 26 编译、打包、上传 app
 ```
-
-用 [XcodeGen](https://github.com/yonaskolb/XcodeGen) 生成 Xcode 工程，这样工程配置是一个文本文件，便于我在 Linux 上维护，你在 Mac 上运行 `xcodegen` 就能得到 `.xcodeproj`。
 
 ## 10. 待验证的问题
 
@@ -400,21 +398,22 @@ agentTouchbar/
 
 **如果所有方法都不能唤醒**：提醒同时发到菜单栏图标（变色或显示数字）和系统通知，保证不会漏掉。
 
-## 11. 开发计划
+## 11. 开发进度
 
-| 阶段 | 内容 | 完成标准 |
+| 阶段 | 内容 | 状态 |
 |---|---|---|
-| **0. 技术验证** | `probe/` 探针：检查私有 API、全局显示和触摸、熄灭后唤醒 | 你在 Mac 上运行 `probe/run.sh`，把报告发给我 |
-| **1. 基础框架** | 菜单栏程序、三区布局、配置热更新、场景匹配、提醒队列、`atb` 和本地服务 | 改配置文件后 Touch Bar 立即变化；`atb notify` 能弹提醒 |
-| **2. 第一批组件** | 验证码、Claude Code/Codex（含允许/拒绝）、Spotify、时间、电量、CPU | 你日常使用一周 |
-| **3. 第二批组件** | 日程和会议提醒、番茄钟和提醒、剪贴板、常用文本、音频切换、快捷指令、系统开关、脚本组件 | 同上 |
-| **4. 第三批组件** | AI 文字处理、天气、AirPods、下载完成 | 同上 |
-| **5. 难度较高的部分** | 会议控制、浏览器标签页、网页视频控制、网页总结 | 同上 |
-| **6. 设置窗口** | 拖拽布局、主题编辑 | 不用手改配置文件也能完成常用设置 |
+| **0. 技术验证** | `probe/` 探针 | 代码完成，CI 编译通过，**等待在真机上运行** |
+| **1. 基础框架** | 菜单栏程序、三区布局、配置热更新、场景匹配、提醒队列、`atb` 和本地服务 | 完成 |
+| **2. 第一批组件** | 验证码、Claude Code/Codex（含允许/拒绝）、Spotify、时间、电量、CPU | 完成 |
+| **3. 第二批组件** | 日程和会议提醒、番茄钟和提醒、剪贴板、常用文本、音频切换、快捷指令、系统开关、脚本组件 | 完成 |
+| **4. 第三批组件** | AI 文字处理、天气、AirPods、下载完成 | 完成 |
+| **5. 难度较高的部分** | 会议控制、浏览器标签页、网页视频控制、网页总结 | 完成 |
+| **6. 设置窗口** | 拖拽布局、主题编辑 | 未开始，目前用配置文件 |
+
+"完成"指代码写完、在 macOS 26 上编译通过、核心逻辑有单元测试。所有涉及 Touch Bar 显示、系统权限和第三方程序的部分都还没有在真机上验证过。
 
 ## 12. 你需要准备
 
-1. 在 Mac 上安装 Xcode（App Store 免费下载）。
-2. 安装 [Homebrew](https://brew.sh/)，然后运行 `brew install xcodegen`。
-3. 在 Xcode → Settings → Accounts 里登录你的 Apple ID，用于本地签名。
-4. 如果要用验证码功能：在 iPhone 上打开"设置 → 信息 → 短信转发"，勾选这台 Mac。
+1. 安装 Xcode 命令行工具：`xcode-select --install`（自己编译时需要；用 CI 打包好的版本则不需要）。
+2. 如果要用验证码功能：在 iPhone 上打开"设置 → 信息 → 短信转发"，勾选这台 Mac。
+3. 想让系统权限在重新编译后不失效：在钥匙串里准备一个代码签名证书，编译时设置 `SIGN_IDENTITY`（见 `scripts/build-app.sh`）。

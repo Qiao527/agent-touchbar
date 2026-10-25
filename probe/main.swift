@@ -393,8 +393,10 @@ final class Probe: NSObject, NSApplicationDelegate {
     }
 }
 
-let app = NSApplication.shared
-let delegate = Probe()
-app.delegate = delegate
-app.setActivationPolicy(.accessory)
-app.run()
+MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    let delegate = Probe()
+    app.delegate = delegate
+    app.setActivationPolicy(.accessory)
+    app.run()
+}
