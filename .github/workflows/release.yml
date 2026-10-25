@@ -1,0 +1,37 @@
+name: Release
+
+# Push a tag like v0.1.0 to build the app and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test
+        run: swift test
+      - name: Build and package app
+        run: ./scripts/build-app.sh
+      - name: Zip
+        run: |
+          cd build
+          ditto -c -k --keepParent agentTouchbar.app "agentTouchbar-${GITHUB_REF_NAME}.zip"
+          shasum -a 256 "agentTouchbar-${GITHUB_REF_NAME}.zip" > "agentTouchbar-${GITHUB_REF_NAME}.zip.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Release notes come from the matching section of CHANGELOG.md.
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '/^## \[/{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            "build/agentTouchbar-${GITHUB_REF_NAME}.zip" \
+            "build/agentTouchbar-${GITHUB_REF_NAME}.zip.sha256" \
+            --title "agentTouchbar ${GITHUB_REF_NAME}" \
+            --notes-file notes.md \
+            --prerelease

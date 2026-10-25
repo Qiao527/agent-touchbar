@@ -1,0 +1,48 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. ...
+        2. ...
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "macOS 27.0 (27A123)"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Mac model
+      placeholder: "MacBook Pro 13-inch M1 (MacBookPro17,1)"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: agentTouchbar version or commit
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant part of config.yaml
+      description: Remove anything private (snippets, API keys).
+      render: yaml
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: From ~/.config/agentTouchbar/agentTouchbar.log. If the Touch Bar itself misbehaves, the output of probe/run.sh helps a lot.
+      render: text

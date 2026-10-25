@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a widget, scene, or integration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation in your day where the Touch Bar could help.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What would appear on the Touch Bar, and when? How would you configure it?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: For example, can a script widget or `atb notify` already do this?
