@@ -1,7 +1,7 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
-/// 组件共用的环境：各种数据源，以及请求重绘、弹出子面板的入口
+/// Shared environment for widgets: data sources, plus hooks to request a redraw or show an overlay.
 @MainActor
 final class Env {
     var config: AppConfig = .default
@@ -18,7 +18,7 @@ final class Env {
     let context = ContextMonitor()
     let pomodoro = PomodoroService()
 
-    /// 由 AppController 设置
+    /// Set by AppController
     var showOverlay: (_ title: String, _ views: [NSView]) -> Void = { _, _ in }
     var hideOverlay: () -> Void = {}
     var widgetNamed: (String) -> Widget? = { _ in nil }
@@ -31,13 +31,14 @@ final class Env {
             case .success(let output):
                 ResultPanel.shared.show(title: promptTitle, text: output, canReplace: canReplace)
             case .failure(let error):
-                ResultPanel.shared.show(title: "\(promptTitle)失败", text: error.localizedDescription, canReplace: false)
+                ResultPanel.shared.show(
+                    title: L("{0} failed", promptTitle), text: error.localizedDescription, canReplace: false)
             }
         }
     }
 }
 
-/// 所有组件的基类。子类在 refresh() 里调用 setContent(_:) 更新显示。
+/// Base class for all widgets. Subclasses call setContent(_:) from refresh() to update the view.
 @MainActor
 class Widget: NSObject {
     let config: WidgetConfig
@@ -48,7 +49,7 @@ class Widget: NSObject {
 
     var options: Options { config.options }
 
-    /// 需要定时刷新的组件返回间隔（秒）
+    /// Widgets that refresh periodically return the interval in seconds
     var refreshInterval: TimeInterval? { nil }
 
     required init(config: WidgetConfig, env: Env) {
@@ -75,7 +76,7 @@ class Widget: NSObject {
         timer = nil
     }
 
-    /// 数据变化或定时器触发时调用
+    /// Called when data changes or the timer fires
     func refresh() {}
 
     func setContent(_ views: [NSView]) {
@@ -83,15 +84,18 @@ class Widget: NSObject {
         stack.isHidden = views.isEmpty
     }
 
-    // 常用控件
-    func button(_ title: String, icon: String? = nil, color: String? = nil, size: CGFloat = 14,
-                _ handler: @escaping () -> Void) -> ActionButton {
-        ActionButton(title: title, icon: Icon.image(icon, size: size),
-                     color: color.map { NSColor.from($0, fallback: UI.accent) }, handler: handler)
+    // Common controls
+    func button(
+        _ title: String, icon: String? = nil, color: String? = nil, size: CGFloat = 14,
+        _ handler: @escaping () -> Void
+    ) -> ActionButton {
+        ActionButton(
+            title: title, icon: Icon.image(icon, size: size),
+            color: color.map { NSColor.from($0, fallback: UI.accent) }, handler: handler)
     }
 }
 
-/// 组件类型 → 类
+/// Widget type → class
 @MainActor
 enum WidgetFactory {
     static let types: [String: Widget.Type] = [
@@ -125,8 +129,10 @@ enum WidgetFactory {
 
     static func make(_ config: WidgetConfig, env: Env) -> Widget {
         if let type = types[config.type] { return type.init(config: config, env: env) }
-        Log.error("未知的组件类型：\(config.type)（id: \(config.id)）")
-        return TextWidget(config: WidgetConfig(id: config.id, type: "text",
-                                               options: Options(["text": .string("未知组件 \(config.type)")])), env: env)
+        Log.error("Unknown widget type: \(config.type) (id: \(config.id))")
+        return TextWidget(
+            config: WidgetConfig(
+                id: config.id, type: "text",
+                options: Options(["text": .string(L("Unknown widget {0}", config.type))])), env: env)
     }
 }

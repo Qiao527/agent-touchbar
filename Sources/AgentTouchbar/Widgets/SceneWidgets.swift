@@ -1,5 +1,5 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
 // MARK: - Spotify
 
@@ -11,11 +11,16 @@ final class NowPlayingWidget: Widget {
         if let artwork = spotify.artwork {
             views.append(UI.imageView(artwork, size: 26))
         }
-        let title = UI.label("\(track.name) – \(track.artist)", size: 12, color: track.playing ? .labelColor : .secondaryLabelColor)
-        title.widthAnchor.constraint(lessThanOrEqualToConstant: CGFloat(options.double("max_width", default: 180))).isActive = true
+        let title = UI.label(
+            "\(track.name) – \(track.artist)", size: 12, color: track.playing ? .labelColor : .secondaryLabelColor)
+        title.widthAnchor.constraint(lessThanOrEqualToConstant: CGFloat(options.double("max_width", default: 180)))
+            .isActive = true
         views.append(title)
         views.append(button("", icon: "sf:backward.fill", size: 12) { spotify.command("previous track") })
-        views.append(button("", icon: track.playing ? "sf:pause.fill" : "sf:play.fill", size: 12) { spotify.command("playpause") })
+        views.append(
+            button("", icon: track.playing ? "sf:pause.fill" : "sf:play.fill", size: 12) {
+                spotify.command("playpause")
+            })
         views.append(button("", icon: "sf:forward.fill", size: 12) { spotify.command("next track") })
         setContent(views)
     }
@@ -29,36 +34,39 @@ final class AgentsWidget: Widget {
     override func refresh() {
         let sessions = env.agents.active.filter { $0.state != .ended }.prefix(3)
         guard !sessions.isEmpty else {
-            return setContent(options.bool("hide_when_empty", default: true) ? []
-                              : [UI.label("没有运行中的 agent", size: 12, color: .secondaryLabelColor)])
+            return setContent(
+                options.bool("hide_when_empty", default: true)
+                    ? []
+                    : [UI.label(L("No agents running"), size: 12, color: .secondaryLabelColor)])
         }
-        setContent(sessions.map { session in
-            let color: String
-            let status: String
-            switch session.state {
-            case .running:
-                color = "blue"
-                status = Text.duration(Date().timeIntervalSince(session.started))
-            case .waiting:
-                color = "orange"
-                status = "等你"
-            case .done:
-                color = "green"
-                status = "完成"
-            case .idle, .ended:
-                color = "gray"
-                status = "空闲"
-            }
-            let name = session.displayName + (session.project.map { "·" + Text.truncate($0, 10) } ?? "")
-            let key = "\(session.agent):\(session.id)"
-            return button("\(name) \(status)", icon: "sf:circle.fill", color: color, size: 8) { [weak self] in
-                self?.env.agents.jump(to: key)
-            }
-        })
+        setContent(
+            sessions.map { session in
+                let color: String
+                let status: String
+                switch session.state {
+                case .running:
+                    color = "blue"
+                    status = Text.duration(Date().timeIntervalSince(session.started))
+                case .waiting:
+                    color = "orange"
+                    status = L("Waiting")
+                case .done:
+                    color = "green"
+                    status = L("Done")
+                case .idle, .ended:
+                    color = "gray"
+                    status = L("Idle")
+                }
+                let name = session.displayName + (session.project.map { "·" + Text.truncate($0, 10) } ?? "")
+                let key = "\(session.agent):\(session.id)"
+                return button("\(name) \(status)", icon: "sf:circle.fill", color: color, size: 8) { [weak self] in
+                    self?.env.agents.jump(to: key)
+                }
+            })
     }
 }
 
-// MARK: - 番茄钟和喝水、起身提醒
+// MARK: - Pomodoro and water / stand-up reminders
 
 @MainActor
 final class PomodoroService {
@@ -99,14 +107,18 @@ final class PomodoroService {
             let focusDone = finished == .focus
             alerts?.post(
                 kind: AlertKind.pomodoro, id: "pomodoro", source: "pomodoro",
-                title: focusDone ? "🍅 专注结束，休息一下" : "休息结束",
-                detail: "今天完成 \(pomodoro.completedRounds) 轮", icon: "sf:timer", color: "red",
+                title: focusDone ? L("🍅 Focus done, take a break") : L("Break over"),
+                detail: L("Rounds today: {0}", pomodoro.completedRounds), icon: "sf:timer", color: "red",
                 actions: focusDone
-                    ? [AlertAction(id: "rest", title: "休息", color: "green"),
-                       AlertAction(id: "again", title: "再来一轮", color: "red"),
-                       AlertAction(id: "snooze", title: "5 分钟后", color: "gray")]
-                    : [AlertAction(id: "again", title: "开始专注", color: "red"),
-                       AlertAction(id: "stop", title: "结束", color: "gray")]
+                    ? [
+                        AlertAction(id: "rest", title: L("Break"), color: "green"),
+                        AlertAction(id: "again", title: L("One more"), color: "red"),
+                        AlertAction(id: "snooze", title: L("In 5 min"), color: "gray"),
+                    ]
+                    : [
+                        AlertAction(id: "again", title: L("Focus"), color: "red"),
+                        AlertAction(id: "stop", title: L("Stop"), color: "gray"),
+                    ]
             ) { [weak self] action in
                 guard let self else { return }
                 switch action {
@@ -118,21 +130,23 @@ final class PomodoroService {
                 self.onChange?()
             }
         }
-        // 屏幕锁定或休眠期间不算
+        // Time while the screen is locked or asleep does not count
         if waterEvery > 0, now.timeIntervalSince(lastWater) >= waterEvery * 60 {
             lastWater = now
-            alerts?.post(kind: AlertKind.reminder, id: "water", source: "reminder", title: "💧 喝口水吧",
-                         icon: "sf:drop.fill", color: "blue", actions: [AlertAction(id: "ok", title: "好的")])
+            alerts?.post(
+                kind: AlertKind.reminder, id: "water", source: "reminder", title: L("💧 Time for some water"),
+                icon: "sf:drop.fill", color: "blue", actions: [AlertAction(id: "ok", title: L("OK"))])
         }
         if standEvery > 0, now.timeIntervalSince(lastStand) >= standEvery * 60 {
             lastStand = now
-            alerts?.post(kind: AlertKind.reminder, id: "stand", source: "reminder", title: "🧍 起来活动一下",
-                         icon: "sf:figure.walk", color: "green", actions: [AlertAction(id: "ok", title: "好的")])
+            alerts?.post(
+                kind: AlertKind.reminder, id: "stand", source: "reminder", title: L("🧍 Time to stand up and move"),
+                icon: "sf:figure.walk", color: "green", actions: [AlertAction(id: "ok", title: L("OK"))])
         }
         if pomodoro.endsAt != nil { onChange?() }
     }
 
-    /// 电脑休眠回来后，重新计算喝水和起身的时间
+    /// Restart the water and stand-up timers after the Mac wakes from sleep
     func resetReminders() {
         lastWater = Date()
         lastStand = Date()
@@ -145,19 +159,21 @@ final class PomodoroWidget: Widget {
         let p = service.pomodoro
         if let remaining = p.remaining() {
             let isFocus = p.phase == .focus
-            setContent([button("\(isFocus ? "🍅" : "☕️") \(Text.duration(remaining))", color: isFocus ? "red" : "green") {
-                service.stop()
-            }])
+            setContent([
+                button("\(isFocus ? "🍅" : "☕️") \(Text.duration(remaining))", color: isFocus ? "red" : "green") {
+                    service.stop()
+                }
+            ])
         } else {
             setContent([button("🍅", color: nil) { service.startFocus() }])
         }
     }
 }
 
-// MARK: - 会议控制
+// MARK: - Meeting controls
 
-/// 腾讯会议、飞书没有公开接口，这里模拟它们的快捷键，需要"辅助功能"权限。
-/// 快捷键在配置里按程序名设置。
+/// Tencent Meeting and Feishu (Lark) have no public API, so this sends their keyboard shortcuts,
+/// which requires Accessibility permission. Shortcuts are configured per app name.
 final class MeetingWidget: Widget {
     private var startedAt = Date()
 
@@ -173,25 +189,30 @@ final class MeetingWidget: Widget {
         let keys = keyMap(for: app)
         let micOn = env.context.context.micInUse
         var views: [NSView] = [
-            UI.imageView(Icon.image(micOn ? "sf:mic.fill" : "sf:mic.slash.fill", size: 13),
-                         tint: micOn ? .systemGreen : .secondaryLabelColor, size: 18),
+            UI.imageView(
+                Icon.image(micOn ? "sf:mic.fill" : "sf:mic.slash.fill", size: 13),
+                tint: micOn ? .systemGreen : .secondaryLabelColor, size: 18),
             UI.label(Text.duration(Date().timeIntervalSince(startedAt)), size: 12),
         ]
-        for (action, title, icon, color) in [("mute", "静音", "sf:mic.slash.fill", "orange"),
-                                             ("camera", "摄像头", "sf:video.fill", "blue"),
-                                             ("leave", "离开", "sf:phone.down.fill", "red")] {
+        for (action, title, icon, color) in [
+            ("mute", L("Mute"), "sf:mic.slash.fill", "orange"),
+            ("camera", L("Camera"), "sf:video.fill", "blue"),
+            ("leave", L("Leave"), "sf:phone.down.fill", "red"),
+        ] {
             guard let combo = keys[action] else { continue }
-            views.append(button(title, icon: icon, color: color, size: 12) { [weak self] in
-                self?.send(combo, to: app)
-            })
+            views.append(
+                button(title, icon: icon, color: color, size: 12) { [weak self] in
+                    self?.send(combo, to: app)
+                })
         }
         if let event = env.calendar.current, let link = event.link, app == nil {
-            views.append(button("加入会议", icon: "sf:video.fill", color: "green") { NSWorkspace.shared.open(link) })
+            views.append(
+                button(L("Join meeting"), icon: "sf:video.fill", color: "green") { NSWorkspace.shared.open(link) })
         }
         setContent(views)
     }
 
-    /// 当前正在开会的程序：优先前台程序，其次任何在运行的会议软件
+    /// The app currently in a meeting: the frontmost app first, then any running meeting app
     private func meetingApp() -> String? {
         let configured = Array((options["keys"]?.object ?? [:]).keys)
         let front = NSWorkspace.shared.frontmostApplication
@@ -216,7 +237,7 @@ final class MeetingWidget: Widget {
     }
 }
 
-// MARK: - 网页视频
+// MARK: - Web video
 
 final class VideoWidget: Widget {
     private lazy var slider: NSSlider = {
@@ -237,7 +258,8 @@ final class VideoWidget: Widget {
         Browser.video("return v.currentTime+','+v.duration+','+v.paused+','+v.playbackRate;") { [weak self] output in
             guard let self else { return }
             let parts = (output ?? "").split(separator: ",").map(String.init)
-            guard parts.count == 4, let current = Double(parts[0]), let duration = Double(parts[1]), duration.isFinite else {
+            guard parts.count == 4, let current = Double(parts[0]), let duration = Double(parts[1]), duration.isFinite
+            else {
                 if self.hasVideo || self.stack.views.isEmpty == false {
                     self.hasVideo = false
                     self.setContent([])
@@ -248,7 +270,9 @@ final class VideoWidget: Widget {
             self.rate = Double(parts[3]) ?? 1
             if !self.hasVideo { self.build(paused: parts[2] == "true") }
             self.hasVideo = true
-            if Date().timeIntervalSince(self.lastSeek) > 1.5 { self.slider.doubleValue = duration > 0 ? current / duration : 0 }
+            if Date().timeIntervalSince(self.lastSeek) > 1.5 {
+                self.slider.doubleValue = duration > 0 ? current / duration : 0
+            }
             self.time.stringValue = "\(Text.duration(current)) / \(Text.duration(duration))"
         }
     }
@@ -261,14 +285,15 @@ final class VideoWidget: Widget {
             button("", icon: "sf:goforward.10", size: 13) { Browser.video("v.currentTime+=10;") },
             slider,
             time,
-            button("跳过片头", icon: "sf:forward.end.fill", size: 12) { Browser.video("v.currentTime+=\(skip);") },
-            button("倍速", icon: "sf:gauge.with.dots.needle.67percent", size: 12) { [weak self] in
+            button(L("Skip intro"), icon: "sf:forward.end.fill", size: 12) { Browser.video("v.currentTime+=\(skip);") },
+            button(L("Speed"), icon: "sf:gauge.with.dots.needle.67percent", size: 12) { [weak self] in
                 guard let self else { return }
                 let rates: [Double] = [1, 1.25, 1.5, 2]
                 let next = rates.first { $0 > self.rate + 0.01 } ?? 1
                 Browser.video("v.playbackRate=\(next);")
-                self.env.alerts.post(kind: AlertKind.custom, id: "video-rate", source: "video", title: "倍速 \(next)×",
-                                     icon: "sf:gauge.with.dots.needle.67percent", ttl: 2)
+                self.env.alerts.post(
+                    kind: AlertKind.custom, id: "video-rate", source: "video", title: L("Speed {0}×", next),
+                    icon: "sf:gauge.with.dots.needle.67percent", ttl: 2)
             },
         ])
     }
@@ -279,15 +304,15 @@ final class VideoWidget: Widget {
     }
 }
 
-// MARK: - 浏览器
+// MARK: - Browser
 
 final class BrowserWidget: Widget {
     override func refresh() {
         guard stack.views.isEmpty else { return }
         setContent([
-            button("标签页", icon: "sf:square.on.square") { [weak self] in self?.showTabs() },
-            button("总结", icon: "sf:text.append") { [weak self] in self?.summarize() },
-            button("翻译", icon: "sf:character.bubble") { Self.translate() },
+            button(L("Tabs"), icon: "sf:square.on.square") { [weak self] in self?.showTabs() },
+            button(L("Summarize"), icon: "sf:text.append") { [weak self] in self?.summarize() },
+            button(L("Translate"), icon: "sf:character.bubble") { Self.translate() },
         ])
     }
 
@@ -300,7 +325,7 @@ final class BrowserWidget: Widget {
                     self.env.hideOverlay()
                 }
             }
-            self.env.showOverlay("标签页", buttons)
+            self.env.showOverlay(L("Tabs"), buttons)
         }
     }
 
@@ -308,21 +333,30 @@ final class BrowserWidget: Widget {
         Browser.run("document.title+'\\n'+document.body.innerText.slice(0,8000)") { [weak self] text in
             guard let self else { return }
             guard let text, !text.isEmpty else {
-                self.env.alerts.post(kind: AlertKind.custom, source: "browser", title: "读不到网页内容",
-                                     detail: "在浏览器菜单里打开「允许 Apple 事件中的 JavaScript」", icon: "sf:exclamationmark.triangle",
-                                     color: "orange")
+                self.env.alerts.post(
+                    kind: AlertKind.custom, source: "browser", title: L("Can't read the page"),
+                    detail: L("Turn on \"Allow JavaScript from Apple Events\" in the browser menu"),
+                    icon: "sf:exclamationmark.triangle",
+                    color: "orange")
                 return
             }
-            self.env.runAI(promptTitle: "网页总结", prompt: "用中文分点总结这个网页的主要内容，不超过 8 点。", text: text,
-                           canReplace: false)
+            self.env.runAI(
+                promptTitle: L("Page summary"),
+                prompt: L("Summarize the main points of this web page as a bulleted list of at most 8 items."),
+                text: text,
+                canReplace: false)
         }
     }
 
-    /// 用 Google 翻译打开当前网页
+    /// Open the current page in Google Translate
     private static func translate() {
         Browser.currentURL { url in
             guard let url, let encoded = url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-                  let target = URL(string: "https://translate.google.com/translate?sl=auto&tl=zh-CN&u=\(encoded)") else { return }
+                let target = URL(
+                    string:
+                        "https://translate.google.com/translate?sl=auto&tl=\(Localization.language == .simplifiedChinese ? "zh-CN" : "en")&u=\(encoded)"
+                )
+            else { return }
             NSWorkspace.shared.open(target)
         }
     }

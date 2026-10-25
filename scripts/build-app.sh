@@ -1,10 +1,12 @@
 #!/bin/bash
-# 编译并打包 agentTouchbar.app（放在 build/ 目录）。
+# Build and package agentTouchbar.app into build/.
 #
-# 签名：默认 ad-hoc 签名，但每次编译签名都会变，系统权限（辅助功能、完全磁盘访问）需要重新授权。
-# 想让权限保持有效，设置 SIGN_IDENTITY 为钥匙串里的证书名，例如：
+# Signing: defaults to an ad-hoc signature. Ad-hoc signatures change on every
+# build, so macOS forgets permission grants (Accessibility, Full Disk Access).
+# To keep grants across rebuilds, set SIGN_IDENTITY to a certificate in your
+# Keychain, for example:
 #   SIGN_IDENTITY="Apple Development: you@example.com (XXXXXXXXXX)" ./scripts/build-app.sh
-# 查看可用证书：security find-identity -v -p codesigning
+# List available identities with: security find-identity -v -p codesigning
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -16,12 +18,13 @@ swift build -c "$CONFIG" --product atb
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+cp -R Resources/*.lproj "$APP/Contents/Resources/"
 cp "$BIN/AgentTouchbar" "$APP/Contents/MacOS/AgentTouchbar"
 cp "$BIN/atb" "$APP/Contents/MacOS/atb"
 
 IDENTITY="${SIGN_IDENTITY:--}"
 codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/atb"
 codesign --force --sign "$IDENTITY" "$APP"
-echo "已生成 ${PWD}/${APP}，签名：${IDENTITY}"
+echo "Built ${PWD}/${APP} (signature: ${IDENTITY})"

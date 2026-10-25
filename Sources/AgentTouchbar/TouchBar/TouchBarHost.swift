@@ -1,7 +1,7 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
-/// 管理我们的全局 Touch Bar：三个区域、显示/隐藏、唤醒
+/// Owns our global Touch Bar: the three regions, show/hide, and waking the panel.
 @MainActor
 final class TouchBarHost: NSObject, NSTouchBarDelegate {
     private static let leftID = NSTouchBarItem.Identifier("agentTouchbar.left")
@@ -33,7 +33,9 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
 
     var isAvailable: Bool { DFR.canPresent }
 
-    func touchBar(_ touchBar: NSTouchBar, makeItemForIdentifier identifier: NSTouchBarItem.Identifier) -> NSTouchBarItem? {
+    func touchBar(
+        _ touchBar: NSTouchBar, makeItemForIdentifier identifier: NSTouchBarItem.Identifier
+    ) -> NSTouchBarItem? {
         switch identifier {
         case Self.leftID: return leftItem
         case Self.islandID: return islandItem
@@ -50,7 +52,7 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
 
     func show() {
         guard DFR.canPresent else {
-            Log.error("当前系统不支持全局 Touch Bar 私有接口")
+            Log.error("Global Touch Bar private API is not available on this system")
             return
         }
         DFR.addTrayItem(trayItem)
@@ -69,7 +71,7 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
         isShown ? hide() : show()
     }
 
-    /// 有新提醒时调用：Touch Bar 熄灭了就按从温和到强硬的顺序尝试点亮
+    /// Called on new alerts. If the Touch Bar is dark, tries to light it up, gentlest method first.
     func wakeIfNeeded() {
         guard wakeOnAlert else { return }
         if !isShown { show() }
@@ -82,7 +84,7 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                     MainActor.assumeIsolated {
                         if DFR.isDark == true {
-                            Log.info("提醒唤醒：使用 DFRBrightnessClient")
+                            Log.info("Waking for alert via DFRBrightnessClient")
                             DFR.turnPanelOn()
                         }
                     }

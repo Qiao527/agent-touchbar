@@ -1,5 +1,5 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
 // MARK: - esc
 
@@ -12,7 +12,7 @@ final class EscWidget: Widget {
     }
 }
 
-// MARK: - 时间和时区
+// MARK: - Clock and time zones
 
 final class ClockWidget: Widget {
     private let label = UI.label()
@@ -31,9 +31,10 @@ final class ClockWidget: Widget {
     }()
 
     private static let cityNames = [
-        "Asia/Shanghai": "北京", "Asia/Hong_Kong": "香港", "Asia/Tokyo": "东京", "Asia/Singapore": "新加坡",
-        "America/Los_Angeles": "旧金山", "America/New_York": "纽约", "Europe/London": "伦敦",
-        "Europe/Paris": "巴黎", "Europe/Berlin": "柏林", "Australia/Sydney": "悉尼",
+        "Asia/Shanghai": L("Beijing"), "Asia/Hong_Kong": L("Hong Kong"), "Asia/Tokyo": L("Tokyo"),
+        "Asia/Singapore": L("Singapore"), "America/Los_Angeles": L("San Francisco"), "America/New_York": L("New York"),
+        "Europe/London": L("London"), "Europe/Paris": L("Paris"), "Europe/Berlin": L("Berlin"),
+        "Australia/Sydney": L("Sydney"),
     ]
 
     override var refreshInterval: TimeInterval? {
@@ -46,7 +47,7 @@ final class ClockWidget: Widget {
             label.stringValue = formatters.first?.1.string(from: now) ?? ""
             setContent([label])
         } else {
-            // 多个时区：第一个大字，其余两行小字
+            // Several zones: the first in large type, up to two more as two small lines
             label.stringValue = formatters[0].1.string(from: now)
             let others = formatters.dropFirst().prefix(2).map { "\($0.0) \($0.1.string(from: now))" }
             let small = UI.twoLines(others[0], others.count > 1 ? others[1] : "")
@@ -55,7 +56,7 @@ final class ClockWidget: Widget {
     }
 }
 
-// MARK: - 电量
+// MARK: - Battery
 
 final class BatteryWidget: Widget {
     override var refreshInterval: TimeInterval? { 30 }
@@ -63,16 +64,23 @@ final class BatteryWidget: Widget {
     override func refresh() {
         guard let state = env.battery.state else { return setContent([]) }
         let level = state.percent
-        let symbol = state.charging ? "battery.100percent.bolt"
-            : level > 87 ? "battery.100percent" : level > 62 ? "battery.75percent"
-            : level > 37 ? "battery.50percent" : level > 12 ? "battery.25percent" : "battery.0percent"
+        let symbol =
+            state.charging
+            ? "battery.100percent.bolt"
+            : level > 87
+                ? "battery.100percent"
+                : level > 62
+                    ? "battery.75percent"
+                    : level > 37 ? "battery.50percent" : level > 12 ? "battery.25percent" : "battery.0percent"
         let color: NSColor = level <= env.config.battery.lowThreshold && !state.charging ? .systemRed : .labelColor
-        setContent([UI.imageView(Icon.image("sf:\(symbol)", size: 15), tint: color, size: 24),
-                    UI.label("\(level)%", size: 12, color: color)])
+        setContent([
+            UI.imageView(Icon.image("sf:\(symbol)", size: 15), tint: color, size: 24),
+            UI.label("\(level)%", size: 12, color: color),
+        ])
     }
 }
 
-// MARK: - CPU 和内存
+// MARK: - CPU and memory
 
 final class StatsWidget: Widget {
     override var refreshInterval: TimeInterval? { 2 }
@@ -84,12 +92,12 @@ final class StatsWidget: Widget {
             NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app"))
         }
         button.isBordered = false
-        button.attributedTitle = UI.twoLines("CPU \(cpu)%", "内存 \(memory)%", color: color).attributedStringValue
+        button.attributedTitle = UI.twoLines("CPU \(cpu)%", L("Mem {0}%", memory), color: color).attributedStringValue
         setContent([button])
     }
 }
 
-// MARK: - 音量
+// MARK: - Volume
 
 final class VolumeWidget: Widget {
     private lazy var slider: NSSlider = {
@@ -109,12 +117,14 @@ final class VolumeWidget: Widget {
 
     override func refresh() {
         if stack.views.isEmpty { setContent([mute, slider]) }
-        // 刚拖动过滑块时不要用读到的旧值覆盖
+        // Right after the slider moves, don't overwrite it with a stale reading
         guard Date().timeIntervalSince(lastChange) > 2 else { return }
         Audio.volume { [weak self] value, muted in
             guard let self else { return }
             if let value { self.slider.doubleValue = Double(value) }
-            let symbol = muted || value == 0 ? "speaker.slash.fill" : (value ?? 50) < 50 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
+            let symbol =
+                muted || value == 0
+                ? "speaker.slash.fill" : (value ?? 50) < 50 ? "speaker.wave.1.fill" : "speaker.wave.2.fill"
             self.mute.image = Icon.image("sf:\(symbol)")
         }
     }
@@ -125,7 +135,7 @@ final class VolumeWidget: Widget {
     }
 }
 
-// MARK: - 亮度
+// MARK: - Brightness
 
 final class BrightnessWidget: Widget {
     override func refresh() {
@@ -137,12 +147,13 @@ final class BrightnessWidget: Widget {
     }
 }
 
-// MARK: - 天气
+// MARK: - Weather
 
 final class WeatherWidget: Widget {
     override func appear() {
-        env.weather.start(latitude: options.double("latitude", default: 31.23),
-                          longitude: options.double("longitude", default: 121.47))
+        env.weather.start(
+            latitude: options.double("latitude", default: 31.23),
+            longitude: options.double("longitude", default: 121.47))
         super.appear()
     }
 
@@ -153,7 +164,7 @@ final class WeatherWidget: Widget {
     }
 }
 
-// MARK: - 下一个日程
+// MARK: - Next calendar event
 
 final class NextEventWidget: Widget {
     override var refreshInterval: TimeInterval? { 30 }
@@ -163,7 +174,7 @@ final class NextEventWidget: Widget {
         let now = Date()
         let maxWidth = CGFloat(options.double("max_width", default: 260))
         if let current = calendar.current {
-            let title = "\(Text.truncate(current.title, 14)) · 剩 \(Text.countdown(to: current.end, from: now).replacingOccurrences(of: "后", with: ""))"
+            let title = "\(Text.truncate(current.title, 14)) · \(Text.timeLeft(until: current.end, from: now))"
             setContent([eventButton(title, current, color: "blue", maxWidth: maxWidth)])
         } else if let next = calendar.next, next.start.timeIntervalSince(now) < 12 * 3600 {
             let title = "\(Text.truncate(next.title, 14)) · \(Text.countdown(to: next.start, from: now))"
@@ -173,7 +184,9 @@ final class NextEventWidget: Widget {
         }
     }
 
-    private func eventButton(_ title: String, _ event: CalendarService.Event, color: String?, maxWidth: CGFloat) -> NSView {
+    private func eventButton(
+        _ title: String, _ event: CalendarService.Event, color: String?, maxWidth: CGFloat
+    ) -> NSView {
         let b = button(title, icon: event.link == nil ? "sf:calendar" : "sf:video.fill", color: color) {
             if let link = event.link {
                 NSWorkspace.shared.open(link)
@@ -187,7 +200,7 @@ final class NextEventWidget: Widget {
     }
 }
 
-// MARK: - 蓝牙耳机电量
+// MARK: - Bluetooth headphone battery
 
 final class AirPodsWidget: Widget {
     override func appear() {
@@ -197,17 +210,23 @@ final class AirPodsWidget: Widget {
 
     override func refresh() {
         guard let device = env.bluetooth.headphones else { return setContent([]) }
-        let parts = [("left", "左"), ("right", "右"), ("case", "盒")].compactMap { key, name in
-            device.levels[key].map { "\(name)\($0)" }
+        let labels: [(String, (Int) -> String)] = [
+            ("left", { L("L{0}", $0) }), ("right", { L("R{0}", $0) }),
+            ("case", { L("Case {0}", $0) }),
+        ]
+        let parts = labels.compactMap { key, label in
+            device.levels[key].map(label)
         }
         let text = parts.isEmpty ? device.levels["main"].map { "\($0)%" } ?? "" : parts.joined(separator: " ")
         let low = (device.lowest ?? 100) <= env.config.battery.lowThreshold
-        setContent([UI.imageView(Icon.image("sf:airpodspro", size: 14), tint: low ? .systemRed : nil, size: 20),
-                    UI.label(text, size: 11, color: low ? .systemRed : .labelColor)])
+        setContent([
+            UI.imageView(Icon.image("sf:airpodspro", size: 14), tint: low ? .systemRed : nil, size: 20),
+            UI.label(text, size: 11, color: low ? .systemRed : .labelColor),
+        ])
     }
 }
 
-// MARK: - 固定文字
+// MARK: - Static text
 
 final class TextWidget: Widget {
     override func refresh() {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Open-Meteo（免费，不需要 API key）的当前天气
+/// Current weather from Open-Meteo (free, no API key).
 public struct WeatherNow: Equatable, Sendable {
     public var temperature: Double
     public var code: Int
@@ -33,17 +33,17 @@ public struct WeatherNow: Equatable, Sendable {
         return WeatherNow(temperature: response.current.temperature_2m, code: response.current.weather_code)
     }
 
-    /// WMO 天气代码 → SF Symbols 图标和中文描述
+    /// WMO weather code → SF Symbol name and a localized label.
     public var symbol: (name: String, label: String) {
         switch code {
-        case 0: return ("sun.max.fill", "晴")
-        case 1, 2: return ("cloud.sun.fill", "多云")
-        case 3: return ("cloud.fill", "阴")
-        case 45, 48: return ("cloud.fog.fill", "雾")
-        case 51...57: return ("cloud.drizzle.fill", "毛毛雨")
-        case 61...67, 80...82: return ("cloud.rain.fill", "雨")
-        case 71...77, 85, 86: return ("cloud.snow.fill", "雪")
-        case 95...99: return ("cloud.bolt.rain.fill", "雷雨")
+        case 0: return ("sun.max.fill", L("Clear"))
+        case 1, 2: return ("cloud.sun.fill", L("Partly cloudy"))
+        case 3: return ("cloud.fill", L("Overcast"))
+        case 45, 48: return ("cloud.fog.fill", L("Fog"))
+        case 51...57: return ("cloud.drizzle.fill", L("Drizzle"))
+        case 61...67, 80...82: return ("cloud.rain.fill", L("Rain"))
+        case 71...77, 85, 86: return ("cloud.snow.fill", L("Snow"))
+        case 95...99: return ("cloud.bolt.rain.fill", L("Thunderstorm"))
         default: return ("thermometer.medium", "")
         }
     }
@@ -51,11 +51,11 @@ public struct WeatherNow: Equatable, Sendable {
     public var text: String { "\(Int(temperature.rounded()))°" }
 }
 
-/// 从 `system_profiler SPBluetoothDataType -json` 的输出里找耳机电量。
-/// 不同系统版本字段名略有差异，这里匹配所有名字里带 batteryLevel 的字段。
+/// Headphone battery levels from `system_profiler SPBluetoothDataType -json`.
+/// Field names vary across macOS versions, so any field containing batteryLevel is matched.
 public struct BluetoothBattery: Equatable, Sendable {
     public var device: String
-    public var levels: [String: Int]   // left / right / case / main → 百分比
+    public var levels: [String: Int]  // left / right / case / main → percent
 
     public init(device: String, levels: [String: Int]) {
         self.device = device
@@ -76,7 +76,7 @@ public struct BluetoothBattery: Equatable, Sendable {
             for item in array { collect(item, into: &result) }
         } else if let dict = node as? [String: Any] {
             for (key, value) in dict {
-                // 设备一般表示为 { "AirPods Pro": { "device_batteryLevelLeft": "80%", ... } }
+                // Devices usually look like { "AirPods Pro": { "device_batteryLevelLeft": "80%", ... } }
                 if let fields = value as? [String: Any] {
                     let levels = batteryLevels(fields)
                     if !levels.isEmpty {
@@ -95,9 +95,12 @@ public struct BluetoothBattery: Equatable, Sendable {
             let text = "\(value)".replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
             guard let percent = Int(text) else { continue }
             let lower = key.lowercased()
-            let part = lower.contains("left") ? "left"
-                : lower.contains("right") ? "right"
-                : lower.contains("case") ? "case" : "main"
+            let part =
+                lower.contains("left")
+                ? "left"
+                : lower.contains("right")
+                    ? "right"
+                    : lower.contains("case") ? "case" : "main"
             levels[part] = percent
         }
         return levels

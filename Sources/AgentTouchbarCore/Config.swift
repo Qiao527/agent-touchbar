@@ -1,7 +1,7 @@
 import Foundation
 import Yams
 
-// MARK: - 顶层配置
+// MARK: - Top-level config
 
 public struct AppConfig: Decodable, Equatable, Sendable {
     public var version: Int
@@ -46,18 +46,18 @@ public struct AppConfig: Decodable, Equatable, Sendable {
         widgets = try c.value(.widgets, default: [])
     }
 
-    /// 解析 YAML 文本。空文件等同于全部使用默认值。
+    /// Parses YAML text. An empty file means all defaults.
     public static func parse(yaml: String) throws -> AppConfig {
         let trimmed = yaml.trimmingCharacters(in: .whitespacesAndNewlines)
         return try YAMLDecoder().decode(AppConfig.self, from: trimmed.isEmpty ? "{}" : yaml)
     }
 
     public static var `default`: AppConfig {
-        // 内置的默认配置有单元测试保证能解析
+        // Unit tests guarantee the built-in default config parses
         (try? parse(yaml: DefaultConfig.yaml)) ?? (try! parse(yaml: "{}"))
     }
 
-    /// 找到 id 对应的组件配置。布局里直接写类型名（如 `clock`）时，按该类型、空选项处理。
+    /// Returns the widget config for an id. A bare type name in the layout (e.g. `clock`) means that type with no options.
     public func widget(id: String) -> WidgetConfig {
         widgets.first { $0.id == id } ?? WidgetConfig(id: id, type: id, options: Options())
     }
@@ -67,12 +67,12 @@ public struct AppConfig: Decodable, Equatable, Sendable {
     }
 }
 
-// MARK: - 各部分
+// MARK: - Sections
 
 public struct Theme: Decodable, Equatable, Sendable {
     public var accent: String = "#7C5CFF"
     public var fontSize: Double = 13
-    public var density: String = "comfortable"   // compact / comfortable
+    public var density: String = "comfortable"  // compact / comfortable
     public var animations: Bool = true
 
     enum CodingKeys: String, CodingKey {
@@ -94,9 +94,9 @@ public struct Theme: Decodable, Equatable, Sendable {
 }
 
 public struct TouchBarSettings: Decodable, Equatable, Sendable {
-    /// full：占满整条（包括右侧系统按钮区）；app_region：只占左侧程序区域
+    /// full: the whole strip (including the system button area on the right); app_region: only the app area on the left
     public var mode: String = "full"
-    /// 有提醒时，如果 Touch Bar 已熄灭，尝试点亮它
+    /// Try to wake the Touch Bar when an alert arrives while it is dimmed
     public var wakeOnAlert: Bool = true
 
     enum CodingKeys: String, CodingKey {
@@ -139,7 +139,7 @@ public struct Layout: Decodable, Equatable, Sendable {
 public struct AlertRule: Decodable, Equatable, Sendable {
     public var enabled: Bool = true
     public var priority: Int = 50
-    /// 秒；nil 表示一直显示，直到处理
+    /// Seconds; nil keeps the alert until it is handled
     public var ttl: Double? = 30
     public var sticky: Bool = false
 
@@ -161,7 +161,7 @@ public struct AlertRule: Decodable, Equatable, Sendable {
         sticky = try c.value(.sticky, default: sticky)
     }
 
-    /// 实际过期时间
+    /// Effective expiry time
     public func expiry(from date: Date) -> Date? {
         guard !sticky, let ttl else { return nil }
         return date.addingTimeInterval(ttl)
@@ -193,9 +193,9 @@ public enum AlertKind {
 }
 
 public struct AgentSettings: Decodable, Equatable, Sendable {
-    /// 在 Touch Bar 上处理 Claude Code / Codex 的权限请求
+    /// Handle Claude Code / Codex permission requests on the Touch Bar
     public var permissionOnTouchbar: Bool = true
-    /// 等待你在 Touch Bar 上点击的秒数。等待期间终端里的确认框不会出现，所以不宜太长。
+    /// Seconds to wait for a tap on the Touch Bar. The terminal prompt is held back meanwhile, so keep it short.
     public var permissionWait: Int = 30
 
     enum CodingKeys: String, CodingKey {
@@ -214,7 +214,7 @@ public struct AgentSettings: Decodable, Equatable, Sendable {
 
 public struct VerificationCodeSettings: Decodable, Equatable, Sendable {
     public var enabled: Bool = true
-    /// 粘贴后多少秒清除剪贴板（剪贴板内容还是这个码时才清除）
+    /// Seconds after pasting before the clipboard is cleared (only if it still holds the code)
     public var clearClipboardAfter: Double = 120
     public var extraKeywords: [String] = []
 
@@ -237,7 +237,7 @@ public struct VerificationCodeSettings: Decodable, Equatable, Sendable {
 public struct ClipboardSettings: Decodable, Equatable, Sendable {
     public var enabled: Bool = true
     public var maxItems: Int = 20
-    /// Touch Bar 上显示几条
+    /// Number of items shown on the Touch Bar
     public var show: Int = 4
 
     enum CodingKeys: String, CodingKey {
@@ -302,10 +302,10 @@ public struct BatterySettings: Decodable, Equatable, Sendable {
 }
 
 public struct AISettings: Decodable, Equatable, Sendable {
-    /// 兼容 OpenAI Chat Completions 接口的地址（OpenAI、DeepSeek、本地 Ollama 等）
+    /// Any OpenAI Chat Completions compatible endpoint (OpenAI, DeepSeek, local Ollama, ...)
     public var baseURL: String = "https://api.openai.com/v1"
     public var model: String = "gpt-4o-mini"
-    /// 从这个环境变量读取 API key；没有时再从钥匙串读取（服务名 agentTouchbar.ai）
+    /// Environment variable holding the API key; falls back to the Keychain (service agentTouchbar.ai)
     public var apiKeyEnv: String = "OPENAI_API_KEY"
     public var prompts: [AIPrompt] = AIPrompt.defaults
 
@@ -336,9 +336,14 @@ public struct AIPrompt: Codable, Equatable, Sendable {
     }
 
     public static let defaults = [
-        AIPrompt(title: "翻译", prompt: "把下面的文字翻译成中文；如果已经是中文，就翻译成英文。只输出译文。"),
-        AIPrompt(title: "润色", prompt: "润色下面的文字，保持原意和语言，只输出结果。"),
-        AIPrompt(title: "解释", prompt: "用简单的中文解释下面的内容，不超过 120 字。"),
+        AIPrompt(
+            title: "Translate",
+            prompt:
+                "If the text below is in English, translate it into Simplified Chinese; otherwise translate it into English. Output only the translation."
+        ),
+        AIPrompt(
+            title: "Polish", prompt: "Polish the text below. Keep its meaning and language. Output only the result."),
+        AIPrompt(title: "Explain", prompt: "Explain the content below in plain language, in 80 words or fewer."),
     ]
 }
 
@@ -355,7 +360,7 @@ public struct ServerSettings: Decodable, Equatable, Sendable {
     }
 }
 
-/// 一个组件的配置：`id`、`type`，其余键都是这个组件自己的选项
+/// A widget config: `id`, `type`, and every other key is a widget-specific option.
 public struct WidgetConfig: Decodable, Equatable, Sendable {
     public var id: String
     public var type: String
@@ -370,7 +375,8 @@ public struct WidgetConfig: Decodable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         var values = try decoder.singleValueContainer().decode([String: ConfigValue].self)
         guard let id = values.removeValue(forKey: "id")?.string else {
-            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "组件缺少 id"))
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: decoder.codingPath, debugDescription: L("Widget is missing an id")))
         }
         self.id = id
         self.type = values.removeValue(forKey: "type")?.string ?? id
@@ -378,7 +384,7 @@ public struct WidgetConfig: Decodable, Equatable, Sendable {
     }
 }
 
-// MARK: - 解码辅助
+// MARK: - Decoding helpers
 
 extension KeyedDecodingContainer {
     func value<T: Decodable>(_ key: Key, default fallback: T) throws -> T {

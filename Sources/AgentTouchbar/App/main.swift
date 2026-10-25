@@ -1,11 +1,11 @@
 import AppKit
 
-// 程序入口在主线程上运行
+// The entry point runs on the main thread.
 MainActor.assumeIsolated {
     let app = NSApplication.shared
     let controller = AppController()
     app.delegate = controller
-    // 只在菜单栏显示图标，不出现在 Dock
+    // Menu bar icon only; no Dock icon.
     app.setActivationPolicy(.accessory)
     app.run()
 }

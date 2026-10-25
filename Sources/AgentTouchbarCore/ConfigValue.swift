@@ -1,6 +1,6 @@
 import Foundation
 
-/// 配置文件里任意结构的值。组件的选项千差万别，统一用它表示，由各组件自己读取。
+/// An arbitrary config value. Widget options vary widely, so they are stored as-is and each widget reads its own.
 public enum ConfigValue: Codable, Equatable, Sendable {
     case string(String)
     case int(Int)
@@ -27,7 +27,7 @@ public enum ConfigValue: Codable, Equatable, Sendable {
         } else if let value = try? container.decode([String: ConfigValue].self) {
             self = .object(value)
         } else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "无法识别的配置值")
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: L("Unrecognized config value"))
         }
     }
 
@@ -95,7 +95,7 @@ public enum ConfigValue: Codable, Equatable, Sendable {
         return nil
     }
 
-    /// 字符串或字符串数组都接受，方便配置里写 `app: com.foo` 或 `app: [com.foo, com.bar]`
+    /// Accepts a string or a list of strings, so configs can say `app: com.foo` or `app: [com.foo, com.bar]`.
     public var stringList: [String]? {
         if let array { return array.compactMap(\.string) }
         if let string { return [string] }
@@ -103,7 +103,7 @@ public enum ConfigValue: Codable, Equatable, Sendable {
     }
 }
 
-/// 组件选项的便捷读取
+/// Convenience accessors for widget options.
 public struct Options: Equatable, Sendable {
     public var values: [String: ConfigValue]
 

@@ -1,11 +1,12 @@
 import XCTest
+
 @testable import AgentTouchbarCore
 
 final class ConfigTests: XCTestCase {
     func testDefaultConfigParses() throws {
         let config = try AppConfig.parse(yaml: DefaultConfig.yaml)
         XCTAssertEqual(config.layout.left, ["esc"])
-        XCTAssertEqual(config.scenes.first?.name, "开会")
+        XCTAssertEqual(config.scenes.first?.name, "Meeting")
         XCTAssertEqual(config.alertRule(for: AlertKind.agentPermission).priority, 100)
         XCTAssertTrue(config.alertRule(for: AlertKind.agentPermission).sticky)
         XCTAssertEqual(config.widget(id: "weather").options.double("latitude", default: 0), 31.23, accuracy: 0.001)
@@ -19,7 +20,7 @@ final class ConfigTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("config/config.example.yaml")
         let example = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertEqual(example, DefaultConfig.yaml + "\n", "config/config.example.yaml 需要和 DefaultConfig.yaml 保持一致")
+        XCTAssertEqual(example, DefaultConfig.yaml + "\n", "config/config.example.yaml must match DefaultConfig.yaml")
     }
 
     func testEmptyConfigUsesDefaults() throws {
@@ -91,7 +92,7 @@ final class SceneTests: XCTestCase {
     }
 
     func testWeekdaysAreMondayBased() {
-        // 2026-10-25 是周日
+        // 2026-10-25 is a Sunday
         let condition = Condition(weekdays: [7])
         XCTAssertTrue(condition.matches(Context(date: date("2026-10-25 10:00")), calendar: calendar))
         XCTAssertFalse(condition.matches(Context(date: date("2026-10-26 10:00")), calendar: calendar))
@@ -99,22 +100,25 @@ final class SceneTests: XCTestCase {
 
     func testResolverUsesFirstMatchAndHide() throws {
         let config = try AppConfig.parse(yaml: DefaultConfig.yaml)
-        let coding = SceneMatcher.resolve(layout: config.layout, scenes: config.scenes,
-                                          context: Context(frontmostAppName: "iTerm2", date: date("2026-10-25 10:00")),
-                                          calendar: calendar)
-        XCTAssertEqual(coding.sceneName, "写代码")
+        let coding = SceneMatcher.resolve(
+            layout: config.layout, scenes: config.scenes,
+            context: Context(frontmostAppName: "iTerm2", date: date("2026-10-25 10:00")),
+            calendar: calendar)
+        XCTAssertEqual(coding.sceneName, "Coding")
         XCTAssertEqual(coding.island, ["agents", "git_branch", "dev"])
         XCTAssertEqual(coding.right, config.layout.right)
 
-        let night = SceneMatcher.resolve(layout: config.layout, scenes: config.scenes,
-                                         context: Context(frontmostAppName: "Finder", date: date("2026-10-25 23:30")),
-                                         calendar: calendar)
-        XCTAssertEqual(night.sceneName, "夜间")
+        let night = SceneMatcher.resolve(
+            layout: config.layout, scenes: config.scenes,
+            context: Context(frontmostAppName: "Finder", date: date("2026-10-25 23:30")),
+            calendar: calendar)
+        XCTAssertEqual(night.sceneName, "Night")
         XCTAssertFalse(night.right.contains("weather"))
 
-        let none = SceneMatcher.resolve(layout: config.layout, scenes: config.scenes,
-                                        context: Context(frontmostAppName: "Finder", date: date("2026-10-25 10:00")),
-                                        calendar: calendar)
+        let none = SceneMatcher.resolve(
+            layout: config.layout, scenes: config.scenes,
+            context: Context(frontmostAppName: "Finder", date: date("2026-10-25 10:00")),
+            calendar: calendar)
         XCTAssertNil(none.sceneName)
         XCTAssertEqual(none.island, config.layout.island)
     }
@@ -124,13 +128,17 @@ final class AlertQueueTests: XCTestCase {
     func testOrderingReplacementAndExpiry() {
         var queue = AlertQueue()
         let now = Date()
-        XCTAssertTrue(queue.push(Alert(id: "a", kind: "x", source: "t", title: "低", priority: 10, createdAt: now)))
-        XCTAssertTrue(queue.push(Alert(id: "b", kind: "x", source: "t", title: "高", priority: 90, createdAt: now,
-                                       expiresAt: now.addingTimeInterval(5))))
+        XCTAssertTrue(queue.push(Alert(id: "a", kind: "x", source: "t", title: "low", priority: 10, createdAt: now)))
+        XCTAssertTrue(
+            queue.push(
+                Alert(
+                    id: "b", kind: "x", source: "t", title: "high", priority: 90, createdAt: now,
+                    expiresAt: now.addingTimeInterval(5))))
         XCTAssertEqual(queue.top?.id, "b")
-        XCTAssertFalse(queue.push(Alert(id: "a", kind: "x", source: "t", title: "低-更新", priority: 10, createdAt: now)))
+        XCTAssertFalse(
+            queue.push(Alert(id: "a", kind: "x", source: "t", title: "low-updated", priority: 10, createdAt: now)))
         XCTAssertEqual(queue.count, 2)
-        XCTAssertEqual(queue.alert(id: "a")?.title, "低-更新")
+        XCTAssertEqual(queue.alert(id: "a")?.title, "low-updated")
         XCTAssertEqual(queue.nextExpiry, now.addingTimeInterval(5))
         XCTAssertEqual(queue.prune(at: now.addingTimeInterval(6)).map(\.id), ["b"])
         XCTAssertEqual(queue.top?.id, "a")
@@ -140,7 +148,8 @@ final class AlertQueueTests: XCTestCase {
         var queue = AlertQueue()
         let now = Date()
         queue.push(Alert(id: "old", kind: "x", source: "t", title: "", priority: 50, createdAt: now))
-        queue.push(Alert(id: "new", kind: "x", source: "t", title: "", priority: 50, createdAt: now.addingTimeInterval(1)))
+        queue.push(
+            Alert(id: "new", kind: "x", source: "t", title: "", priority: 50, createdAt: now.addingTimeInterval(1)))
         XCTAssertEqual(queue.top?.id, "new")
     }
 
@@ -206,18 +215,20 @@ final class HookTests: XCTestCase {
     }
 
     func testClaudePermissionSummary() throws {
-        let input = try decode("""
-        {"session_id":"s1","cwd":"/tmp","hook_event_name":"PermissionRequest","tool_name":"Bash",
-         "tool_input":{"command":"rm -rf\\n node_modules","description":"清理"}}
-        """)
+        let input = try decode(
+            """
+            {"session_id":"s1","cwd":"/tmp","hook_event_name":"PermissionRequest","tool_name":"Bash",
+             "tool_input":{"command":"rm -rf\\n node_modules","description":"清理"}}
+            """)
         XCTAssertEqual(input.toolSummary, "Bash: rm -rf node_modules")
         XCTAssertNil(HookMapping.event(agent: "claude", input: input, terminal: nil))
     }
 
     func testCodexArrayCommand() throws {
-        let input = try decode("""
-        {"session_id":"s1","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":["git","push"]}}
-        """)
+        let input = try decode(
+            """
+            {"session_id":"s1","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":["git","push"]}}
+            """)
         XCTAssertEqual(input.toolSummary, "Bash: git push")
         XCTAssertEqual(HookMapping.event(agent: "codex", input: input, terminal: nil)?.state, .running)
     }
@@ -229,10 +240,13 @@ final class HookTests: XCTestCase {
         XCTAssertEqual(event?.detail, "完成了 全部测试")
         XCTAssertEqual(event?.terminal, "iTerm.app")
 
-        let notify = try decode(#"{"session_id":"s","hook_event_name":"Notification","message":"需要权限","notification_type":"permission_prompt"}"#)
+        let notify = try decode(
+            #"{"session_id":"s","hook_event_name":"Notification","message":"需要权限","notification_type":"permission_prompt"}"#
+        )
         XCTAssertEqual(HookMapping.event(agent: "claude", input: notify, terminal: nil)?.state, .waiting)
 
-        let idle = try decode(#"{"session_id":"s","hook_event_name":"Notification","message":"等待输入","notification_type":"idle_prompt"}"#)
+        let idle = try decode(
+            #"{"session_id":"s","hook_event_name":"Notification","message":"等待输入","notification_type":"idle_prompt"}"#)
         XCTAssertEqual(HookMapping.event(agent: "claude", input: idle, terminal: nil)?.state, .done)
 
         let end = try decode(#"{"session_id":"s","hook_event_name":"SessionEnd"}"#)
@@ -303,17 +317,51 @@ final class HTTPTests: XCTestCase {
 }
 
 final class UtilityTests: XCTestCase {
+    private var savedLanguage = Localization.language
+
+    override func setUp() {
+        super.setUp()
+        savedLanguage = Localization.language
+        Localization.language = .english
+    }
+
+    override func tearDown() {
+        Localization.language = savedLanguage
+        super.tearDown()
+    }
+
     func testText() {
         XCTAssertEqual(Text.truncate("一二三四五六", 4), "一二三…")
         XCTAssertEqual(Text.truncate("短", 4), "短")
         XCTAssertEqual(Text.mask("6222020200001234"), "•••• 1234")
         let now = Date()
-        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(299), from: now), "5 分钟后")
-        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(30), from: now), "30 秒后")
-        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(-5), from: now), "现在")
-        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(5400), from: now), "1 小时 30 分后")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(299), from: now), "in 5 min")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(30), from: now), "in 30 s")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(-5), from: now), "now")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(7200), from: now), "in 2 h")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(5400), from: now), "in 1 h 30 min")
         XCTAssertEqual(Text.duration(65), "01:05")
         XCTAssertEqual(Text.duration(3725), "1:02:05")
+    }
+
+    func testTimeLeft() {
+        let now = Date()
+        XCTAssertEqual(Text.timeLeft(until: now.addingTimeInterval(30), from: now), "30 s left")
+        XCTAssertEqual(Text.timeLeft(until: now.addingTimeInterval(299), from: now), "5 min left")
+        XCTAssertEqual(Text.timeLeft(until: now.addingTimeInterval(5400), from: now), "1 h 30 min left")
+        XCTAssertEqual(Text.timeLeft(until: now.addingTimeInterval(-5), from: now), "0 s left")
+        Localization.language = .simplifiedChinese
+        XCTAssertEqual(Text.timeLeft(until: now.addingTimeInterval(299), from: now), "剩 5 分钟")
+    }
+
+    func testChineseCountdown() {
+        Localization.language = .simplifiedChinese
+        let now = Date()
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(-5), from: now), "现在")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(30), from: now), "30 秒后")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(299), from: now), "5 分钟后")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(7200), from: now), "2 小时后")
+        XCTAssertEqual(Text.countdown(to: now.addingTimeInterval(5400), from: now), "1 小时 30 分后")
     }
 
     func testMeetingLink() {
@@ -371,16 +419,16 @@ final class UtilityTests: XCTestCase {
         let data = Data(#"{"current":{"time":"2026-10-25T10:00","temperature_2m":18.6,"weather_code":61}}"#.utf8)
         let weather = WeatherNow.parse(data)
         XCTAssertEqual(weather?.text, "19°")
-        XCTAssertEqual(weather?.symbol.label, "雨")
+        XCTAssertEqual(weather?.symbol.label, "Rain")
         XCTAssertNotNil(WeatherNow.url(latitude: 31.2, longitude: 121.4))
     }
 
     func testBluetoothBattery() {
         let json = """
-        {"SPBluetoothDataType":[{"device_connected":[{"Qiao 的 AirPods Pro":{"device_batteryLevelLeft":"80%",
-          "device_batteryLevelRight":"15%","device_batteryLevelCase":"60%","device_address":"x"}},
-          {"Magic Mouse":{"device_batteryLevelMain":"55%"}}]}]}
-        """
+            {"SPBluetoothDataType":[{"device_connected":[{"Qiao 的 AirPods Pro":{"device_batteryLevelLeft":"80%",
+              "device_batteryLevelRight":"15%","device_batteryLevelCase":"60%","device_address":"x"}},
+              {"Magic Mouse":{"device_batteryLevelMain":"55%"}}]}]}
+            """
         let devices = BluetoothBattery.parse(Data(json.utf8))
         let airpods = devices.first { $0.device.contains("AirPods") }
         XCTAssertEqual(airpods?.levels["right"], 15)

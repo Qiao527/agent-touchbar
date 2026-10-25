@@ -1,7 +1,7 @@
-import AppKit
 import AgentTouchbarCore
+import AppKit
 
-// MARK: - AI 接口（兼容 OpenAI Chat Completions）
+// MARK: - AI client (OpenAI Chat Completions compatible)
 
 @MainActor
 final class AIService {
@@ -15,7 +15,7 @@ final class AIService {
     func complete(system: String, user: String, completion: @escaping @MainActor (Result<String, Error>) -> Void) {
         let base = settings.baseURL.hasSuffix("/") ? String(settings.baseURL.dropLast()) : settings.baseURL
         guard let url = URL(string: base + "/chat/completions") else {
-            return completion(.failure(AIError.message("base_url 无效")))
+            return completion(.failure(AIError.message(L("Invalid base_url"))))
         }
         var request = URLRequest(url: url, timeoutInterval: 60)
         request.httpMethod = "POST"
@@ -32,15 +32,16 @@ final class AIService {
             if let error {
                 result = .failure(error)
             } else if let data,
-                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let choices = object["choices"] as? [[String: Any]],
-                      let message = choices.first?["message"] as? [String: Any],
-                      let content = message["content"] as? String {
+                let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                let choices = object["choices"] as? [[String: Any]],
+                let message = choices.first?["message"] as? [String: Any],
+                let content = message["content"] as? String
+            {
                 result = .success(content.trimmingCharacters(in: .whitespacesAndNewlines))
             } else {
                 let status = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let text = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                result = .failure(AIError.message("接口返回 \(status)：\(Text.truncate(text, 200))"))
+                result = .failure(AIError.message(L("API returned {0}: {1}", status, Text.truncate(text, 200))))
             }
             onMain { completion(result) }
         }.resume()
@@ -55,21 +56,24 @@ final class AIService {
     }
 }
 
-// MARK: - 读取选中的文字
+// MARK: - Reading selected text
 
 @MainActor
 enum Selection {
-    /// 先用辅助功能接口读取；读不到就模拟 ⌘C，读完恢复原来的剪贴板
+    /// Tries the Accessibility API first. If that fails, simulates ⌘C and then restores the previous clipboard.
     static func read(_ completion: @escaping @MainActor (String?) -> Void) {
         guard Permissions.accessibility(prompt: true) else { return completion(nil) }
         let system = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         if AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-           let element = focused {
+            let element = focused
+        {
             var selected: CFTypeRef?
             // swiftlint:disable:next force_cast
-            if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selected) == .success,
-               let text = selected as? String, !text.isEmpty {
+            if AXUIElementCopyAttributeValue(element as! AXUIElement, kAXSelectedTextAttribute as CFString, &selected)
+                == .success,
+                let text = selected as? String, !text.isEmpty
+            {
                 return completion(text)
             }
         }
@@ -77,7 +81,7 @@ enum Selection {
         let board = NSPasteboard.general
         let previous = board.string(forType: .string)
         let before = board.changeCount
-        Keyboard.send(KeyCombo(command: true, keyCode: 0x08))   // ⌘C
+        Keyboard.send(KeyCombo(command: true, keyCode: 0x08))  // ⌘C
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             MainActor.assumeIsolated {
                 let text = board.changeCount != before ? board.string(forType: .string) : nil
@@ -88,9 +92,9 @@ enum Selection {
     }
 }
 
-// MARK: - 结果面板
+// MARK: - Result panel
 
-/// 不抢焦点的浮动面板，显示在鼠标附近。"替换"会把结果粘贴回原来的输入框。
+/// Non-activating floating panel shown near the mouse. "Replace" pastes the result back into the original text field.
 @MainActor
 final class ResultPanel: NSObject {
     static let shared = ResultPanel()
@@ -119,15 +123,16 @@ final class ResultPanel: NSObject {
     }
 
     func showLoading(_ title: String) {
-        show(title: title, text: "思考中…", canReplace: false)
+        show(title: title, text: L("Thinking…"), canReplace: false)
     }
 
     private var replaceButton: NSButton?
 
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 420, height: 240),
-                            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow],
-                            backing: .buffered, defer: false)
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 240),
+            styleMask: [.titled, .closable, .resizable, .nonactivatingPanel, .utilityWindow],
+            backing: .buffered, defer: false)
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.hidesOnDeactivate = false
@@ -142,9 +147,9 @@ final class ResultPanel: NSObject {
         textView.autoresizingMask = [.width]
         scroll.documentView = textView
 
-        let replace = NSButton(title: "替换原文", target: self, action: #selector(replace))
-        let copy = NSButton(title: "复制", target: self, action: #selector(copyResult))
-        let close = NSButton(title: "关闭", target: self, action: #selector(closePanel))
+        let replace = NSButton(title: L("Replace original"), target: self, action: #selector(replace))
+        let copy = NSButton(title: L("Copy"), target: self, action: #selector(copyResult))
+        let close = NSButton(title: L("Close"), target: self, action: #selector(closePanel))
         replace.keyEquivalent = "\r"
         replaceButton = replace
         let buttons = NSStackView(views: [replace, copy, close])
@@ -180,13 +185,13 @@ final class ResultPanel: NSObject {
     }
 }
 
-// MARK: - 浏览器（AppleScript 执行网页里的 JavaScript）
+// MARK: - Browser (runs page JavaScript via AppleScript)
 
 @MainActor
 enum Browser {
     enum Kind { case chrome(String), safari }
 
-    /// 前台浏览器。Chrome 内核的浏览器（Chrome、Edge、Arc、Brave）用同一套 AppleScript
+    /// The frontmost browser. Chromium-based browsers (Chrome, Edge, Arc, Brave) share the same AppleScript.
     static var front: Kind? {
         switch NSWorkspace.shared.frontmostApplication?.bundleIdentifier {
         case "com.google.Chrome": return .chrome("Google Chrome")
@@ -198,7 +203,7 @@ enum Browser {
         }
     }
 
-    /// 在当前标签页执行 JavaScript。需要在浏览器里打开"允许 Apple 事件中的 JavaScript"
+    /// Runs JavaScript in the current tab. Requires "Allow JavaScript from Apple Events" to be enabled in the browser.
     static func run(_ javascript: String, completion: (@MainActor (String?) -> Void)? = nil) {
         guard let kind = front else { completion?(nil); return }
         let js = Shell.quote(javascript)
@@ -210,7 +215,7 @@ enum Browser {
             script = "tell application \"Safari\" to do JavaScript \(js) in current tab of front window"
         }
         Shell.osascript(script) { result in
-            if result.status != 0 { Log.error("浏览器脚本失败：\(result.error)") }
+            if result.status != 0 { Log.error("Browser script failed: \(result.error)") }
             completion?(result.status == 0 ? result.output.trimmingCharacters(in: .whitespacesAndNewlines) : nil)
         }
     }
@@ -221,24 +226,24 @@ enum Browser {
         switch kind {
         case .chrome(let name):
             script = """
-            tell application "\(name)"
-                set out to ""
-                repeat with t in tabs of front window
-                    set out to out & (title of t) & linefeed
-                end repeat
-                return out
-            end tell
-            """
+                tell application "\(name)"
+                    set out to ""
+                    repeat with t in tabs of front window
+                        set out to out & (title of t) & linefeed
+                    end repeat
+                    return out
+                end tell
+                """
         case .safari:
             script = """
-            tell application "Safari"
-                set out to ""
-                repeat with t in tabs of front window
-                    set out to out & (name of t) & linefeed
-                end repeat
-                return out
-            end tell
-            """
+                tell application "Safari"
+                    set out to ""
+                    repeat with t in tabs of front window
+                        set out to out & (name of t) & linefeed
+                    end repeat
+                    return out
+                end tell
+                """
         }
         Shell.osascript(script) { result in
             completion(result.output.components(separatedBy: "\n").filter { !$0.isEmpty })
@@ -251,7 +256,8 @@ enum Browser {
         case .chrome(let name):
             Shell.osascript("tell application \"\(name)\" to set active tab index of front window to \(index + 1)")
         case .safari:
-            Shell.osascript("tell application \"Safari\" to set current tab of front window to tab \(index + 1) of front window")
+            Shell.osascript(
+                "tell application \"Safari\" to set current tab of front window to tab \(index + 1) of front window")
         }
     }
 
@@ -259,10 +265,10 @@ enum Browser {
         run("location.href", completion: completion)
     }
 
-    /// 页面上面积最大的视频
+    /// The largest video on the page.
     static let videoJS = """
-    (function(){var v=[].slice.call(document.querySelectorAll('video')).sort(function(a,b){return b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight})[0];if(!v)return '';%@})()
-    """
+        (function(){var v=[].slice.call(document.querySelectorAll('video')).sort(function(a,b){return b.clientWidth*b.clientHeight-a.clientWidth*a.clientHeight})[0];if(!v)return '';%@})()
+        """
 
     static func video(_ body: String, completion: (@MainActor (String?) -> Void)? = nil) {
         run(videoJS.replacingOccurrences(of: "%@", with: body), completion: completion)

@@ -1,9 +1,9 @@
 import Foundation
 
-/// 从短信里提取的验证码
+/// A verification code extracted from a text message.
 public struct VerificationCode: Equatable, Sendable {
     public var code: String
-    /// 来源，例如短信开头的【招商银行】；找不到时为发送方号码
+    /// Source, e.g. the 【Brand】 prefix of an SMS; falls back to the sender number.
     public var source: String?
 
     public init(code: String, source: String?) {
@@ -18,17 +18,21 @@ public enum VerificationCodeExtractor {
         "verification code", "security code", "passcode", "one-time", "otp", "code",
     ]
 
-    /// 出现在数字前面时，说明这个数字不是验证码（卡号尾号、金额等）
+    /// When these precede a number, it is not a code (card number suffix, amount, ...).
     private static let excludedPrefixes = ["尾号", "末四位", "末4位", "ending in", "ending", "¥", "￥", "$", "金额"]
-    /// 出现在数字后面时，说明这个数字不是验证码
-    private static let excludedSuffixes = ["元", "分钟", "秒", "小时", "minutes", "minute", "mins", "min", "seconds", "hours", "%"]
+    /// When these follow a number, it is not a code.
+    private static let excludedSuffixes = [
+        "元", "分钟", "秒", "小时", "minutes", "minute", "mins", "min", "seconds", "hours", "%",
+    ]
 
-    public static func extract(from text: String, sender: String? = nil,
-                               extraKeywords: [String] = []) -> VerificationCode? {
+    public static func extract(
+        from text: String, sender: String? = nil,
+        extraKeywords: [String] = []
+    ) -> VerificationCode? {
         let lower = text.lowercased()
         let keywords = (defaultKeywords + extraKeywords).map { $0.lowercased() }
 
-        // 关键词在文本里的位置
+        // Offsets of keywords in the text
         var keywordPositions: [Int] = []
         for keyword in keywords where !keyword.isEmpty {
             var searchStart = lower.startIndex
@@ -42,7 +46,7 @@ public enum VerificationCodeExtractor {
         let candidates = findCandidates(in: text)
         guard !candidates.isEmpty else { return nil }
 
-        // 选离关键词最近的；纯数字优先于字母数字混合
+        // Pick the candidate closest to a keyword; purely numeric beats alphanumeric
         let best = candidates.min { a, b in
             let da = distance(a.offset, keywordPositions)
             let db = distance(b.offset, keywordPositions)
@@ -60,7 +64,7 @@ public enum VerificationCodeExtractor {
     }
 
     private static func findCandidates(in text: String) -> [Candidate] {
-        // 前后不能紧挨字母或数字，避免截取长数字的一部分
+        // Must not touch letters or digits on either side, so we never grab part of a longer number
         let pattern = #"(?<![A-Za-z0-9])[A-Za-z0-9]{4,8}(?![A-Za-z0-9])"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let ns = text as NSString
@@ -70,9 +74,9 @@ public enum VerificationCodeExtractor {
             let value = ns.substring(with: match.range)
             let hasDigit = value.contains { $0.isNumber }
             let hasLetter = value.contains { $0.isLetter }
-            guard hasDigit else { continue }   // 纯字母的单词不算
+            guard hasDigit else { continue }  // plain words don't count
 
-            // 字母数字混合时，必须是全大写或全小写字母加数字，且数字不少于 2 个，避免把普通单词当成码
+            // Alphanumeric codes need single-case letters and at least 2 digits, so ordinary words are not taken as codes
             if hasLetter {
                 let digits = value.filter(\.isNumber).count
                 let letters = value.filter(\.isLetter)
@@ -86,9 +90,12 @@ public enum VerificationCodeExtractor {
             let beforeTrimmed = before.trimmingCharacters(in: .whitespaces)
             if excludedPrefixes.contains(where: { beforeTrimmed.hasSuffix($0) }) { continue }
             if excludedSuffixes.contains(where: { after.hasPrefix($0) }) { continue }
-            // 类似 2026-10-25、12:30 的日期时间
+            // Dates and times such as 2026-10-25 or 12:30
             if let last = beforeTrimmed.last, [":", "-", "/", "."].contains(last), !hasLetter,
-               beforeTrimmed.dropLast().last?.isNumber == true { continue }
+                beforeTrimmed.dropLast().last?.isNumber == true
+            {
+                continue
+            }
             if let first = after.first, [":", "/"].contains(first) { continue }
 
             result.append(Candidate(value: value, offset: match.range.location, isNumeric: !hasLetter))
@@ -100,25 +107,26 @@ public enum VerificationCodeExtractor {
         positions.map { abs($0 - offset) }.min() ?? Int.max
     }
 
-    /// 短信里的【品牌】或 [品牌]
+    /// The 【brand】 or [brand] tag in an SMS.
     static func brand(in text: String) -> String? {
         let pattern = #"[【\[]([^】\]]{1,20})[】\]]"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
-              match.numberOfRanges > 1 else { return nil }
+            let match = regex.firstMatch(in: text, range: NSRange(location: 0, length: (text as NSString).length)),
+            match.numberOfRanges > 1
+        else { return nil }
         return (text as NSString).substring(with: match.range(at: 1))
     }
 }
 
-/// 新版 macOS 的"信息"把正文存在 `attributedBody` 里（NSArchiver 的 typedstream 格式）。
-/// 这里只取出其中的纯文本，不需要完整解码。
+/// Recent macOS versions of Messages store the body in `attributedBody` (NSArchiver typedstream format).
+/// We only pull out the plain text instead of fully decoding it.
 public enum AttributedBodyDecoder {
     public static func text(from data: Data) -> String? {
         let bytes = [UInt8](data)
         let marker = Array("NSString".utf8)
         guard let markerIndex = find(marker, in: bytes) else { return nil }
 
-        // "NSString" 之后有 5 个字节的类型信息，接着是长度
+        // "NSString" is followed by 5 bytes of type info, then the length
         var index = markerIndex + marker.count + 5
         guard index < bytes.count else { return nil }
 
@@ -129,7 +137,8 @@ public enum AttributedBodyDecoder {
             index += 3
         } else if bytes[index] == 0x82 {
             guard index + 4 < bytes.count else { return nil }
-            length = Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
+            length =
+                Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
                 | (Int(bytes[index + 3]) << 16) | (Int(bytes[index + 4]) << 24)
             index += 5
         } else {
@@ -148,7 +157,7 @@ public enum AttributedBodyDecoder {
         return nil
     }
 
-    /// 测试用：按同样的格式生成一段数据
+    /// For tests: encodes text in the same format.
     public static func encodeForTesting(_ text: String) -> Data {
         var bytes: [UInt8] = Array("streamtyped".utf8) + [0x81, 0xE8, 0x03, 0x84, 0x01, 0x40, 0x84, 0x84, 0x84]
         bytes += Array("NSAttributedString".utf8) + [0x00, 0x84, 0x84]
