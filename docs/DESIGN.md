@@ -250,7 +250,13 @@ struct Alert: Identifiable {
 
 [MTMR](https://github.com/Toxblh/MTMR) 和 [Pock](https://github.com/pock/pock) 都是这样实现的，可以参考。
 
-**风险**：私有 API 可能在新系统中失效。第 0 阶段先在 macOS 27 上验证它是否可用。
+**已知情况（2026-10-25 调研）**：
+
+- [StripGauge](https://github.com/CodeCampusCo/stripgauge) 在 **macOS 26.5.2 + M1 13 寸**上实测过 `DFRElementSetControlStripPresenceForIdentifier`、`addSystemTrayItem:` 和 `presentSystemModalTouchBar:systemTrayItemIdentifier:`，都可用。它的设计文档还提到，只占左侧区域的方式会保留系统的亮度和音量按钮，占满整条则需要自己重新实现这些按钮。
+- BetterTouchTool 依赖同样的机制。它的作者在 macOS 27 第一个测试版上就说整体能正常工作，论坛上目前也没有 Touch Bar 失效的报告（[论坛帖](https://community.folivora.ai/t/macos-27-golden-gate/47224)）。
+- 还没有找到在 macOS 27 正式版上直接验证这些调用的公开记录，所以用 `probe/` 里的探针在你的 Mac 上实测。
+
+**布局决定**：先用占满整条的方式（`placement: 1`），右侧自己实现亮度、音量。如果探针显示整条方式不可用，就退回到只占左侧区域，右侧保留系统 Control Strip。
 
 ## 7. 各功能实现要点
 
@@ -380,19 +386,25 @@ agentTouchbar/
 
 | 问题 | 为什么重要 | 怎么验证 |
 |---|---|---|
-| Touch Bar 闲置变暗或熄灭后，程序更新内容能否把它点亮 | 决定"有事才出现"是否有效 | 第 0 阶段原型：等它熄灭后发一个提醒 |
-| `DFRFoundation` 私有 API 在 macOS 27 上是否可用 | 决定能否全局显示 | 第 0 阶段原型 |
+| Touch Bar 闲置熄灭后，程序能否把它点亮 | 决定"有事才出现"是否有效 | 运行 `probe/run.sh`。已知线索见下方 |
+| `DFRFoundation` 私有 API 在 macOS 27 上是否可用 | 决定能否全局显示 | 运行 `probe/run.sh`。已知情况见 §6 |
 | AirPods 电量的读取方式 | 没有公开 API | 在你的 Mac 上试 `system_profiler SPBluetoothDataType` 和 `ioreg` |
 | 腾讯会议、飞书的 bundle id 和快捷键 | 会议场景要用 | 运行 `osascript -e 'id of app "腾讯会议"'`，查看各软件的快捷键设置 |
 | macOS 27 上 `chat.db` 的结构 | 验证码功能依赖它 | 第 2 阶段用真实数据测试 |
 
-**如果 Touch Bar 熄灭后无法唤醒**：提醒同时发到菜单栏图标（变色或显示数字）和系统通知，保证不会漏掉。
+**唤醒的已知线索**：
+
+- 系统负责闲置变暗的 `TouchBarServer` 用的是 `DFRBrightness.framework` 里的 `DFRBrightnessClient` 类，它有 `turnOn` 和 `turnOff` 方法。[TouchBarOff](https://github.com/gbili/touchbar-off) 在 **M1 13 寸 + macOS 15.5** 上用它关闭和点亮 Touch Bar，并用 `DFRGetStatus()` 判断亮暗（`0x4` 位为 1 表示熄灭）。
+- 公开 API `IOPMAssertionDeclareUserActivity` 可以声明"用户有操作"，可能也会让 Touch Bar 重新亮起，但没有找到实测记录。
+- 探针按"只更新内容 → 重新显示 → 声明用户操作 → 私有 API 点亮"的顺序逐个尝试，记录哪种有效，以及点亮后能亮多久。
+
+**如果所有方法都不能唤醒**：提醒同时发到菜单栏图标（变色或显示数字）和系统通知，保证不会漏掉。
 
 ## 11. 开发计划
 
 | 阶段 | 内容 | 完成标准 |
 |---|---|---|
-| **0. 技术验证** | 最小原型：全局显示一个按钮；测试熄灭后能否唤醒 | 你在 Mac 上跑通，并告诉我唤醒测试的结果 |
+| **0. 技术验证** | `probe/` 探针：检查私有 API、全局显示和触摸、熄灭后唤醒 | 你在 Mac 上运行 `probe/run.sh`，把报告发给我 |
 | **1. 基础框架** | 菜单栏程序、三区布局、配置热更新、场景匹配、提醒队列、`atb` 和本地服务 | 改配置文件后 Touch Bar 立即变化；`atb notify` 能弹提醒 |
 | **2. 第一批组件** | 验证码、Claude Code/Codex（含允许/拒绝）、Spotify、时间、电量、CPU | 你日常使用一周 |
 | **3. 第二批组件** | 日程和会议提醒、番茄钟和提醒、剪贴板、常用文本、音频切换、快捷指令、系统开关、脚本组件 | 同上 |
