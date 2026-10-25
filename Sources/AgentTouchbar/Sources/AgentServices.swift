@@ -57,8 +57,9 @@ final class AgentServer {
     private func accept(_ connection: NWConnection) {
         // 再确认一次对方来自本机
         if case .hostPort(let host, _) = connection.endpoint {
+            // 地址可能带网卡后缀，例如 127.0.0.1%lo0
             let text = "\(host)"
-            guard text == "127.0.0.1" || text == "::1" || text.hasPrefix("localhost") else {
+            guard text.hasPrefix("127.") || text.hasPrefix("::1") || text.hasPrefix("localhost") else {
                 connection.cancel()
                 return
             }
