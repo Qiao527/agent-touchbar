@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.3
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Lint
         run: swift format lint --strict --recursive Sources Tests probe Package.swift
       - name: Test
@@ -30,7 +30,7 @@ jobs:
     name: Build app (macOS)
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Toolchain
         run: swift --version
       - name: Test
