@@ -49,7 +49,7 @@ jobs:
           echo '{"hook_event_name":"PermissionRequest","session_id":"ci","tool_name":"Bash"}' | $ATB hook claude
       - name: Zip
         run: cd build && ditto -c -k --keepParent agentTouchbar.app agentTouchbar.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: agentTouchbar
           path: build/agentTouchbar.zip
