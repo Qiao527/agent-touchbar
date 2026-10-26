@@ -25,12 +25,12 @@
 **从源码安装**（需要先运行 `xcode-select --install`）：
 
 ```bash
-git clone https://github.com/Qiao527/agentTouchbar.git
-cd agentTouchbar
+git clone https://github.com/Qiao527/agent-touchbar.git
+cd agent-touchbar
 ./scripts/install.sh
 ```
 
-**下载编译好的版本**：发布第一个版本后，可以在 [Releases](https://github.com/Qiao527/agentTouchbar/releases) 下载；在那之前，每次 CI 构建都会上传一个打包好的 app。这个版本没有经过苹果公证，打开前先解除隔离：
+**下载编译好的版本**：发布第一个版本后，可以在 [Releases](https://github.com/Qiao527/agent-touchbar/releases) 下载；在那之前，每次 CI 构建都会上传一个打包好的 app。这个版本没有经过苹果公证，打开前先解除隔离：
 
 ```bash
 xattr -dr com.apple.quarantine agentTouchbar.app

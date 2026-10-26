@@ -1,6 +1,6 @@
 # agentTouchbar
 
-[![CI](https://github.com/Qiao527/agentTouchbar/actions/workflows/build.yml/badge.svg)](https://github.com/Qiao527/agentTouchbar/actions/workflows/build.yml)
+[![CI](https://github.com/Qiao527/agent-touchbar/actions/workflows/build.yml/badge.svg)](https://github.com/Qiao527/agent-touchbar/actions/workflows/build.yml)
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-lightgrey)
 ![Swift](https://img.shields.io/badge/swift-5.10%2B-orange)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -68,12 +68,12 @@ Requirements: a MacBook Pro with Touch Bar and Apple silicon (13-inch M1 or M2),
 **From source** (needs `xcode-select --install`):
 
 ```bash
-git clone https://github.com/Qiao527/agentTouchbar.git
-cd agentTouchbar
+git clone https://github.com/Qiao527/agent-touchbar.git
+cd agent-touchbar
 ./scripts/install.sh
 ```
 
-**Prebuilt:** download the zip from [Releases](https://github.com/Qiao527/agentTouchbar/releases) once the first version is tagged (until then, every CI run uploads one as an artifact). The build is not notarized, so clear the quarantine flag before opening it:
+**Prebuilt:** download the zip from [Releases](https://github.com/Qiao527/agent-touchbar/releases) once the first version is tagged (until then, every CI run uploads one as an artifact). The build is not notarized, so clear the quarantine flag before opening it:
 
 ```bash
 xattr -dr com.apple.quarantine agentTouchbar.app
