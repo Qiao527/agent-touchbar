@@ -4,7 +4,7 @@ agentTouchbar runs with access to sensitive things: your text messages (for veri
 
 ## Reporting a vulnerability
 
-Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/Qiao527/agentTouchbar/security/advisories/new) rather than in a public issue. I aim to reply within 7 days.
+Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/Qiao527/agent-touchbar/security/advisories/new) rather than in a public issue. I aim to reply within 7 days.
 
 ## Threat model
 

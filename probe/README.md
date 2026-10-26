@@ -10,7 +10,7 @@ Automatically tests two things on your Mac:
 You only need the Xcode Command Line Tools (if they are missing, run `xcode-select --install` first):
 
 ```bash
-cd agentTouchbar/probe
+cd agent-touchbar/probe
 ./run.sh
 ```
 

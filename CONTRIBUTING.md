@@ -7,8 +7,8 @@ Thanks for your interest. Bug reports, widget ideas, and pull requests are welco
 You need a Mac with the Xcode Command Line Tools (`xcode-select --install`). A Touch Bar is only required for testing the Touch Bar layer itself.
 
 ```bash
-git clone https://github.com/Qiao527/agentTouchbar.git
-cd agentTouchbar
+git clone https://github.com/Qiao527/agent-touchbar.git
+cd agent-touchbar
 swift test                 # core logic tests (also runs on Linux)
 ./scripts/build-app.sh     # builds build/agentTouchbar.app
 ```
