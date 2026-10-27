@@ -10,11 +10,20 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+if [[ "$(uname -s)" != Darwin ]]; then
+    echo "The menu bar app requires macOS. Run ./scripts/check.sh for Linux core and CLI checks." >&2
+    exit 1
+fi
+
 APP="build/agentTouchbar.app"
 CONFIG="${CONFIGURATION:-release}"
+case "$CONFIG" in
+    debug|release) ;;
+    *) echo "CONFIGURATION must be debug or release" >&2; exit 1 ;;
+esac
 
-swift build -c "$CONFIG" --product AgentTouchbar
-swift build -c "$CONFIG" --product atb
+swift build --force-resolved-versions -c "$CONFIG" --product AgentTouchbar
+swift build --force-resolved-versions -c "$CONFIG" --product atb
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
 rm -rf "$APP"
@@ -27,4 +36,5 @@ cp "$BIN/atb" "$APP/Contents/MacOS/atb"
 IDENTITY="${SIGN_IDENTITY:--}"
 codesign --force --sign "$IDENTITY" "$APP/Contents/MacOS/atb"
 codesign --force --sign "$IDENTITY" "$APP"
+codesign --verify --deep --strict "$APP"
 echo "Built ${PWD}/${APP} (signature: ${IDENTITY})"

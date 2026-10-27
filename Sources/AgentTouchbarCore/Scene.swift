@@ -102,10 +102,12 @@ public struct Condition: Decodable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        if let list = try? c.decodeIfPresent([String].self, forKey: .app) {
-            app = list
-        } else if let single = try? c.decodeIfPresent(String.self, forKey: .app) {
-            app = [single]
+        if c.contains(.app), try !c.decodeNil(forKey: .app) {
+            if let single = try? c.decode(String.self, forKey: .app) {
+                app = [single]
+            } else {
+                app = try c.decode([String].self, forKey: .app)
+            }
         }
         micInUse = try c.decodeIfPresent(Bool.self, forKey: .micInUse)
         playing = try c.decodeIfPresent(String.self, forKey: .playing)
@@ -159,7 +161,7 @@ public struct TimeRange: Equatable, Sendable {
     private static func minutes(_ text: String) -> Int? {
         let parts = text.split(separator: ":")
         guard parts.count == 2, let h = Int(parts[0]), let m = Int(parts[1]),
-            (0...24).contains(h), (0..<60).contains(m)
+            (0...24).contains(h), (0..<60).contains(m), (h < 24 || m == 0)
         else { return nil }
         return h * 60 + m
     }

@@ -12,6 +12,8 @@ final class AgentServer {
     var handler: ((HTTPRequest, @escaping Responder) -> Void)?
     private var listener: NWListener?
     private let token: String
+    private var connections: [ObjectIdentifier: NWConnection] = [:]
+    private var reading: Set<ObjectIdentifier> = []
     private(set) var port: Int = 0
     private(set) var lastError: String?
 
@@ -21,7 +23,12 @@ final class AgentServer {
 
     func start(port: Int) {
         stop()
-        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(clamping: port)) else { return }
+        guard !token.isEmpty, (1...65535).contains(port),
+            let nwPort = NWEndpoint.Port(rawValue: UInt16(port))
+        else {
+            lastError = "Local server requires a valid port and a nonempty token"
+            return
+        }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: nwPort)
         parameters.allowLocalEndpointReuse = true
@@ -52,6 +59,10 @@ final class AgentServer {
     func stop() {
         listener?.cancel()
         listener = nil
+        let active = Array(connections.values)
+        connections.removeAll()
+        reading.removeAll()
+        active.forEach { $0.cancel() }
     }
 
     private func accept(_ connection: NWConnection) {
@@ -64,6 +75,29 @@ final class AgentServer {
                 return
             }
         }
+        guard connections.count < 64 else { return connection.cancel() }
+        let id = ObjectIdentifier(connection)
+        connections[id] = connection
+        reading.insert(id)
+        connection.stateUpdateHandler = { [weak self] state in
+            MainActor.assumeIsolated {
+                switch state {
+                case .cancelled, .failed:
+                    self?.connections[id] = nil
+                    self?.reading.remove(id)
+                default: break
+                }
+            }
+        }
+        // Slow or incomplete requests cannot hold connections indefinitely.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak connection] in
+            MainActor.assumeIsolated {
+                guard self?.reading.contains(id) == true else { return }
+                connection?.cancel()
+            }
+        }
+        // Permission polling is capped at 300 seconds, with a small response margin.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 310) { [weak connection] in connection?.cancel() }
         connection.start(queue: .main)
         receive(connection, buffer: Data())
     }
@@ -79,6 +113,7 @@ final class AgentServer {
                 case .needMore where !isComplete && error == nil:
                     self.receive(connection, buffer: buffer)
                 case .complete(let request):
+                    self.reading.remove(ObjectIdentifier(connection))
                     self.handle(request, connection)
                 case .invalid(let reason):
                     self.reply(connection, .error(400, reason))
@@ -94,6 +129,9 @@ final class AgentServer {
             return reply(connection, .error(401, "Invalid token"))
         }
         if request.path == "/v1/health" {
+            guard request.method == "GET" else {
+                return reply(connection, .error(405, "Only GET is supported"))
+            }
             return reply(connection, .json(["ok": true]))
         }
         guard let handler else { return reply(connection, .error(404, "Not ready")) }
@@ -264,7 +302,7 @@ final class AgentTracker {
                 AlertAction(id: "deny", title: L("Deny"), color: "red"),
                 AlertAction(id: "terminal", title: L("Open terminal"), color: "gray"),
             ],
-            payload: ["session": key], ttl: Double(request.wait)
+            payload: ["session": key], ttl: Double(max(5, min(request.wait, 300)))
         ) { [weak self] action in
             switch action {
             case "allow": finish(.allow)
@@ -277,7 +315,7 @@ final class AgentTracker {
         }
 
         // Safety net: alert rules may make it sticky, so force-finish after the requested wait time.
-        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(request.wait)) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(max(5, min(request.wait, 300)))) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.pendingPermissions[alertID] != nil else { return }
                 self.alerts.dismiss(id: alertID)

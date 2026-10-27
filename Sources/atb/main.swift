@@ -117,16 +117,29 @@ func runCodexNotify(_ arguments: [String]) -> Never {
 
 func runNotify(_ arguments: [String]) -> Never {
     var options: [String: String] = [:]
+    let supported = Set(["title", "detail", "icon", "color", "ttl", "priority", "id", "kind"])
     var index = 0
     while index < arguments.count {
         let key = arguments[index]
         guard key.hasPrefix("--"), index + 1 < arguments.count else {
             fail(L("Unrecognized argument: {0}", key) + "\n\n" + usage)
         }
-        options[String(key.dropFirst(2))] = arguments[index + 1]
+        let name = String(key.dropFirst(2))
+        guard supported.contains(name), options[name] == nil else {
+            fail(L("Unrecognized argument: {0}", key))
+        }
+        options[name] = arguments[index + 1]
         index += 2
     }
-    guard let title = options["title"] else { fail(L("Missing --title") + "\n\n" + usage) }
+    guard let title = options["title"], !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        fail(L("Missing --title") + "\n\n" + usage)
+    }
+    if let raw = options["ttl"] {
+        guard let value = Double(raw), value.isFinite, (0...604800).contains(value) else {
+            fail(L("Invalid value for {0}", "--ttl"))
+        }
+    }
+    if let raw = options["priority"], Int(raw) == nil { fail(L("Invalid value for {0}", "--priority")) }
     let request = NotifyRequest(
         id: options["id"], kind: options["kind"], title: title, detail: options["detail"],
         icon: options["icon"], color: options["color"],
@@ -167,6 +180,14 @@ func runHooks(_ agent: String?) -> Never {
     let atb =
         Bundle.main.executableURL?.resolvingSymlinksInPath().path
         ?? "/Applications/agentTouchbar.app/Contents/MacOS/atb"
+    // Quote for the shell first, then encode for JSON/TOML. Installation paths can contain spaces or quotes.
+    let executable = "'" + atb.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.withoutEscapingSlashes]
+    func command(_ agent: String) -> String {
+        let text = executable + " hook " + agent
+        return String(decoding: try! encoder.encode(text), as: UTF8.self)
+    }
     switch agent {
     case "claude":
         let note = L("Merge the following into the \"hooks\" field of ~/.claude/settings.json:")
@@ -175,13 +196,13 @@ func runHooks(_ agent: String?) -> Never {
             # \(note)
             {
               "hooks": {
-                "SessionStart":      [{ "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }],
-                "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }],
-                "PreToolUse":        [{ "matcher": "*", "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }],
-                "PermissionRequest": [{ "matcher": "*", "hooks": [{ "type": "command", "command": "\(atb) hook claude", "timeout": 330 }] }],
-                "Notification":      [{ "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }],
-                "Stop":              [{ "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }],
-                "SessionEnd":        [{ "hooks": [{ "type": "command", "command": "\(atb) hook claude" }] }]
+                "SessionStart":      [{ "hooks": [{ "type": "command", "command": \(command("claude")) }] }],
+                "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": \(command("claude")) }] }],
+                "PreToolUse":        [{ "matcher": "*", "hooks": [{ "type": "command", "command": \(command("claude")) }] }],
+                "PermissionRequest": [{ "matcher": "*", "hooks": [{ "type": "command", "command": \(command("claude")), "timeout": 330 }] }],
+                "Notification":      [{ "hooks": [{ "type": "command", "command": \(command("claude")) }] }],
+                "Stop":              [{ "hooks": [{ "type": "command", "command": \(command("claude")) }] }],
+                "SessionEnd":        [{ "hooks": [{ "type": "command", "command": \(command("claude")) }] }]
               }
             }
             """)
@@ -193,28 +214,28 @@ func runHooks(_ agent: String?) -> Never {
             [[hooks.SessionStart]]
             [[hooks.SessionStart.hooks]]
             type = "command"
-            command = "\(atb) hook codex"
+            command = \(command("codex"))
 
             [[hooks.UserPromptSubmit]]
             [[hooks.UserPromptSubmit.hooks]]
             type = "command"
-            command = "\(atb) hook codex"
+            command = \(command("codex"))
 
             [[hooks.PreToolUse]]
             [[hooks.PreToolUse.hooks]]
             type = "command"
-            command = "\(atb) hook codex"
+            command = \(command("codex"))
 
             [[hooks.PermissionRequest]]
             [[hooks.PermissionRequest.hooks]]
             type = "command"
-            command = "\(atb) hook codex"
+            command = \(command("codex"))
             timeout = 330
 
             [[hooks.Stop]]
             [[hooks.Stop.hooks]]
             type = "command"
-            command = "\(atb) hook codex"
+            command = \(command("codex"))
             """)
     default:
         fail(L("Usage: atb hooks claude or atb hooks codex"))

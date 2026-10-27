@@ -1,5 +1,11 @@
 import Foundation
 
+#if canImport(Darwin)
+    import Darwin
+#else
+    import Glibc
+#endif
+
 // MARK: - Text
 
 public enum Text {
@@ -90,9 +96,17 @@ public enum Token {
         var generator = SystemRandomNumberGenerator()
         for i in bytes.indices { bytes[i] = UInt8.random(in: 0...255, using: &generator) }
         let token = bytes.map { String(format: "%02x", $0) }.joined()
-        FileManager.default.createFile(
-            atPath: url.path, contents: Data(token.utf8),
-            attributes: [.posixPermissions: 0o600])
+        // Exclusive creation prevents replacing an existing token or following a symlink.
+        let descriptor = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        guard descriptor >= 0 else {
+            let code = errno
+            if code == EEXIST, let existing = read(at: url) { return existing }
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(code))
+        }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        try handle.write(contentsOf: Data(token.utf8))
+        try handle.synchronize()
+        try handle.close()
         return token
     }
 
@@ -207,7 +221,8 @@ public struct ClipboardHistory: Equatable, Sendable {
         guard !trimmed.isEmpty else { return }
         items.removeAll { $0 == text }
         items.insert(text, at: 0)
-        if items.count > limit { items.removeLast(items.count - limit) }
+        let capacity = max(0, limit)
+        if items.count > capacity { items.removeLast(items.count - capacity) }
     }
 
     public mutating func clear() { items.removeAll() }

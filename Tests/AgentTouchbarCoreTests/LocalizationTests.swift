@@ -36,8 +36,11 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(Localization.format("{0} of {1}", [3, "five"]), "3 of five")
         XCTAssertEqual(
             Localization.detect(environment: ["AGENT_TOUCHBAR_LANG": "zh"], preferred: ["en-US"]), .simplifiedChinese)
-        XCTAssertEqual(Localization.detect(environment: [:], preferred: ["zh-Hans-CN"]), .simplifiedChinese)
+        XCTAssertEqual(Localization.detect(environment: [:], preferred: ["zh-Hans-CN"]), .english)
         XCTAssertEqual(Localization.detect(environment: [:], preferred: ["en-US"]), .english)
+        XCTAssertEqual(
+            Localization.detect(environment: ["AGENT_TOUCHBAR_LANG": "auto"], preferred: ["zh-Hans"]),
+            .simplifiedChinese)
     }
 
     // MARK: - Helpers

@@ -95,23 +95,44 @@ final class CalendarService {
     var onChange: (() -> Void)?
     var onMeetingSoon: ((Event) -> Void)?
 
+    private var enabled = false
+    private var generation = 0
+    private var observer: NSObjectProtocol?
+
     func start() {
+        guard !enabled else { return }
+        enabled = true
+        generation += 1
+        let requestedGeneration = generation
         store.requestFullAccessToEvents { [weak self] granted, error in
             onMain {
-                guard let self else { return }
+                guard let self, self.enabled, self.generation == requestedGeneration else { return }
                 self.authorized = granted
                 if !granted { Log.error("No calendar access: \(error?.localizedDescription ?? "denied by user")") }
                 self.timer = repeatingTimer(30) { [weak self] in self?.refresh() }
             }
         }
-        NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) {
+        observer = NotificationCenter.default.addObserver(forName: .EKEventStoreChanged, object: store, queue: .main) {
             [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
     }
 
+    func stop() {
+        enabled = false
+        generation += 1
+        timer?.invalidate()
+        timer = nil
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        observer = nil
+        authorized = false
+        upcoming = []
+        alerted = []
+        onChange?()
+    }
+
     func refresh() {
-        guard authorized else { return }
+        guard enabled, authorized else { return }
         let now = Date()
         let predicate = store.predicateForEvents(
             withStart: now.addingTimeInterval(-3 * 3600),
@@ -129,6 +150,7 @@ final class CalendarService {
             upcoming = events
             onChange?()
         }
+        alerted.formIntersection(Set(events.map(\.id)))
         for event in events where !alerted.contains(event.id) {
             let until = event.start.timeIntervalSince(now)
             if until <= Double(leadMinutes * 60) && until > -60 {

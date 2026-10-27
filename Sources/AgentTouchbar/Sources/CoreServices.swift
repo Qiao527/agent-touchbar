@@ -24,6 +24,8 @@ final class ConfigStore {
             try? DefaultConfig.yaml.write(to: url, atomically: true, encoding: .utf8)
             Log.info("Wrote default config: \(url.path)")
         }
+        // Apply safe defaults even if the first config file is invalid or unreadable.
+        onChange?(config)
         reload(force: true)
         timer = repeatingTimer(1, fireNow: false) { [weak self] in self?.reload(force: false) }
     }

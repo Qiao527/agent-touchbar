@@ -7,7 +7,7 @@
 
 **Turn the MacBook Pro Touch Bar into a context-aware "dynamic island."** It stays quiet until something needs you (an SMS verification code, Claude Code asking for permission, a meeting starting in five minutes), lets you handle it with one tap, and changes its controls with what you are doing.
 
-English | [简体中文](README.zh-CN.md)
+English is the default language. [Simplified Chinese documentation](README.zh-CN.md) is also available.
 
 <!-- TODO: replace with a recording from real hardware -->
 > 📹 Demo GIF coming soon: the project has not been run on Touch Bar hardware yet (see [Status](#status)).
@@ -28,7 +28,7 @@ Most people with a Touch Bar MacBook ignore it: the default controls duplicate t
 | **Scenes** (switch automatically) | Meeting: mute, camera, leave, timer · Coding: agent status, git branch, command buttons · Browser: video scrubber, speed, skip intro, tabs, page summary · Music: Spotify artwork and controls |
 | **One-tap actions** | Clipboard history · snippets (secrets in Keychain) · audio output switching · dark mode, Do Not Disturb, screenshot, lock · AI translate / polish / explain for selected text |
 | **Status** | Clock with multiple time zones · weather · battery · CPU and memory · next event countdown |
-| **Extensible** | Script widgets (any script that prints JSON) · `atb notify` from your own tools · YAML config with hot reload · English and Simplified Chinese UI |
+| **Extensible** | Script widgets (any script that prints JSON) · `atb notify` from your own tools · YAML config with hot reload · English UI with optional Simplified Chinese |
 
 ## How it works
 
@@ -93,6 +93,27 @@ mv agentTouchbar.app /Applications/ && open /Applications/agentTouchbar.app
 | Calendar | Next event and meeting alerts |
 | Automation | Spotify, browser video, dark mode (macOS prompts on first use) |
 
+## Development and verification
+
+The core library and `atb` CLI build on Linux and macOS with Swift 6.3 or later and Python 3. The menu bar app needs macOS 14 or later and Xcode Command Line Tools.
+
+```bash
+./scripts/check.sh
+```
+
+This runs strict Swift formatting checks, the core regression suite, end-to-end CLI checks against an isolated local HTTP fixture, and installer rollback tests with mocked macOS commands. It does not require API credentials, access to your messages, or an actual running menu bar app. Dependencies are resolved from the committed `Package.resolved` without updating it.
+
+On macOS, also build the app and exercise the packaged CLI:
+
+```bash
+./scripts/build-app.sh
+python3 scripts/smoke-test.py build/agentTouchbar.app/Contents/MacOS/atb
+```
+
+Use `AGENT_TOUCHBAR_LANG=zh` to opt into Simplified Chinese or `AGENT_TOUCHBAR_LANG=auto` to follow your system language. New configurations translate selected text into English by default; existing custom prompts are preserved.
+
+See [Release and installation](docs/RELEASE.md) for packaging, signing, recovery, and hardware acceptance checks, and [Project review](docs/PROJECT_REVIEW.md) for the scope and limits of the latest hardening work.
+
 ## Configuration
 
 Everything lives in `~/.config/agentTouchbar/config.yaml`, created on first launch and reloaded on save. If a change has an error, the app keeps the last good config and shows where the error is. Full example: [config/config.example.yaml](config/config.example.yaml).
@@ -137,7 +158,7 @@ A few problems that shaped the design:
 - **Waking a dimmed Touch Bar.** The Touch Bar turns itself off after about a minute idle, which would defeat "show only when needed." The app escalates from re-presenting the bar, to the public `IOPMAssertionDeclareUserActivity`, to the private `DFRBrightnessClient` used by the system's own dimming, checking `DFRGetStatus` after each step.
 - **Approving agent actions safely.** The permission hook blocks while the Touch Bar waits for a tap, so it has a hard timeout and falls back to the terminal prompt. A down app, a bad token, or malformed input all produce "no decision," never a failure.
 - **Reading message bodies.** Recent macOS versions store SMS text in `attributedBody`, a serialized `NSAttributedString`, instead of the `text` column. The decoder extracts the string from the typedstream without a full unarchiver, and it is unit-tested with generated fixtures.
-- **Testing without the hardware.** Everything except the AppKit layer is in a Foundation-only target, so 49 unit tests run on Linux in CI. A test also scans the sources and fails if any UI string lacks a translation.
+- **Testing without the hardware.** Everything except the AppKit layer is in a Foundation-only target, so 61 unit tests run on Linux in CI. A test also scans the sources and fails if any UI string lacks a translation.
 
 ## Status
 

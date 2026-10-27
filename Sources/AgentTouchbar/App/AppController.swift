@@ -45,7 +45,6 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.battery.start()
         env.stats.start()
         env.spotify.start()
-        env.calendar.start()
         env.context.start()
 
         host.show()
@@ -92,6 +91,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.battery.threshold = config.battery.lowThreshold
         env.bluetooth.threshold = config.battery.lowThreshold
         env.calendar.leadMinutes = config.calendar.leadMinutes
+        config.calendar.enabled ? env.calendar.start() : env.calendar.stop()
         env.ai.settings = config.ai
 
         messages.extraKeywords = config.verificationCodes.extraKeywords
@@ -384,6 +384,12 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func startServer(port: Int) {
         server?.stop()
+        // Retry token setup on configuration reload; never expose an unauthenticated server.
+        if token.isEmpty {
+            do { token = try Token.loadOrCreate() } catch {
+                Log.error("Failed to create token: \(error.localizedDescription)")
+            }
+        }
         let server = AgentServer(token: token)
         server.handler = { [weak self] request, respond in
             self?.handle(request, respond) ?? respond(.error(503, "Not ready"))

@@ -60,11 +60,7 @@ enum Log {
 enum Shell {
     private static let queue = DispatchQueue(label: "agentTouchbar.shell", attributes: .concurrent)
 
-    struct Result {
-        var status: Int32
-        var output: String
-        var error: String
-    }
+    typealias Result = CommandRunner.Result
 
     /// Runs a program in the background and delivers the result on the main thread.
     static func run(
@@ -93,40 +89,7 @@ enum Shell {
     }
 
     static func runSync(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> Result {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: executable)
-        process.arguments = arguments
-        let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-        process.standardInput = FileHandle.nullDevice
-        do {
-            try process.run()
-        } catch {
-            return Result(status: -1, output: "", error: error.localizedDescription)
-        }
-        // Drain output before waiting for exit, so a large output cannot fill the pipe and deadlock.
-        let group = DispatchGroup()
-        var outData = Data(), errData = Data()
-        group.enter()
-        DispatchQueue.global().async {
-            outData = out.fileHandleForReading.readDataToEndOfFile(); group.leave()
-        }
-        group.enter()
-        DispatchQueue.global().async {
-            errData = err.fileHandleForReading.readDataToEndOfFile(); group.leave()
-        }
-
-        let deadline = DispatchTime.now() + timeout
-        if group.wait(timeout: deadline) == .timedOut {
-            process.terminate()
-            return Result(status: -2, output: "", error: "Timed out")
-        }
-        process.waitUntilExit()
-        return Result(
-            status: process.terminationStatus,
-            output: String(data: outData, encoding: .utf8) ?? "",
-            error: String(data: errData, encoding: .utf8) ?? "")
+        CommandRunner.run(executable, arguments, timeout: timeout)
     }
 
     /// Escapes a string as an AppleScript string literal.

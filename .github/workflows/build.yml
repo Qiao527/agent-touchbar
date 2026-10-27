@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "codex/**"]
   pull_request:
   workflow_dispatch:
 
@@ -17,36 +17,32 @@ jobs:
   linux:
     name: Core tests & lint (Linux)
     # Core logic is AppKit-free, so it is tested on Linux: fast and cheap.
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     container: swift:6.3
     steps:
       - uses: actions/checkout@v7
-      - name: Lint
-        run: swift format lint --strict --recursive Sources Tests probe Package.swift
-      - name: Test
-        run: swift test
+      - name: Install smoke-test runtime
+        run: apt-get update && apt-get install -y --no-install-recommends python3
+      - name: Verify core and CLI
+        run: ./scripts/check.sh
 
   macos:
     name: Build app (macOS)
+    timeout-minutes: 30
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
       - name: Toolchain
         run: swift --version
-      - name: Test
-        run: swift test
+      - name: Verify core and CLI
+        run: ./scripts/check.sh
       - name: Build and package app
         run: ./scripts/build-app.sh
       - name: Build probe
         run: swiftc -O probe/main.swift -o build/ATBProbe
-      - name: Smoke-test atb
-        run: |
-          ATB=build/agentTouchbar.app/Contents/MacOS/atb
-          $ATB --help
-          $ATB hooks claude | tail -n +2 | python3 -m json.tool > /dev/null
-          # Hooks must exit 0 even when the app is not running.
-          echo '{"hook_event_name":"Stop","session_id":"ci"}' | $ATB hook claude
-          echo '{"hook_event_name":"PermissionRequest","session_id":"ci","tool_name":"Bash"}' | $ATB hook claude
+      - name: Smoke-test packaged CLI
+        run: python3 scripts/smoke-test.py build/agentTouchbar.app/Contents/MacOS/atb
       - name: Zip
         run: cd build && ditto -c -k --keepParent agentTouchbar.app agentTouchbar.zip
       - uses: actions/upload-artifact@v7

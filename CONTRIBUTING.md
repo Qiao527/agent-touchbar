@@ -4,14 +4,14 @@ Thanks for your interest. Bug reports, widget ideas, and pull requests are welco
 
 ## Development setup
 
-You need a Mac with the Xcode Command Line Tools (`xcode-select --install`). A Touch Bar is only required for testing the Touch Bar layer itself.
+Use Swift 6.3 or later and Python 3 on Linux or macOS for core and CLI development. Building the menu bar app requires a Mac with Xcode Command Line Tools (`xcode-select --install`). A Touch Bar is required for hardware acceptance testing.
 
 ```bash
-git clone https://github.com/Qiao527/agent-touchbar.git
-cd agent-touchbar
-swift test                 # core logic tests (also runs on Linux)
-./scripts/build-app.sh     # builds build/agentTouchbar.app
+./scripts/check.sh          # lint, core tests, CLI integration checks, installer regression checks
+./scripts/build-app.sh      # macOS only: build and verify build/agentTouchbar.app
 ```
+
+`SWIFT_JOBS=4` controls test build parallelism. `scripts/check.sh` accepts SwiftPM cache/configuration path arguments for environments with a read-only home directory. See [docs/RELEASE.md](docs/RELEASE.md) for release requirements.
 
 ## Project layout
 
