@@ -10,7 +10,7 @@ import Foundation
 /// Placeholders are positional: `{0}`, `{1}`, ... Translations must use the
 /// same set of placeholders; `LocalizationTests` enforces that.
 public enum Localization {
-    /// Override with `AGENT_TOUCHBAR_LANG=en` or `AGENT_TOUCHBAR_LANG=zh`.
+    /// English by default. Set `AGENT_TOUCHBAR_LANG=zh` for Chinese or `auto` to follow the system.
     public static var language: Language = detect()
 
     public enum Language: Sendable {
@@ -31,10 +31,11 @@ public enum Localization {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         preferred: [String] = Locale.preferredLanguages
     ) -> Language {
-        if let forced = environment["AGENT_TOUCHBAR_LANG"]?.lowercased() {
-            return forced.hasPrefix("zh") ? .simplifiedChinese : .english
+        let forced = environment["AGENT_TOUCHBAR_LANG"]?.lowercased() ?? "en"
+        if forced == "auto" {
+            return preferred.first?.lowercased().hasPrefix("zh") == true ? .simplifiedChinese : .english
         }
-        return preferred.first?.lowercased().hasPrefix("zh") == true ? .simplifiedChinese : .english
+        return forced.hasPrefix("zh") ? .simplifiedChinese : .english
     }
 
     public static func translate(_ english: String) -> String {
@@ -44,9 +45,15 @@ public enum Localization {
 
     /// Replaces `{0}`, `{1}`, ... with the given arguments.
     public static func format(_ template: String, _ arguments: [CustomStringConvertible]) -> String {
+        // Substitute from the template only; argument text may itself contain placeholders.
+        guard let regex = try? NSRegularExpression(pattern: #"\{(\d+)\}"#) else { return template }
+        let source = template as NSString
         var result = template
-        for (index, argument) in arguments.enumerated() {
-            result = result.replacingOccurrences(of: "{\(index)}", with: argument.description)
+        for match in regex.matches(in: template, range: NSRange(location: 0, length: source.length)).reversed() {
+            guard let index = Int(source.substring(with: match.range(at: 1))),
+                arguments.indices.contains(index), let range = Range(match.range, in: result)
+            else { continue }
+            result.replaceSubrange(range, with: arguments[index].description)
         }
         return result
     }

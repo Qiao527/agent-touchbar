@@ -86,7 +86,7 @@ ai:
   model: gpt-4o-mini
   api_key_env: OPENAI_API_KEY           # or run `atb set-key` to store it in the Keychain
   prompts:
-    - { title: Translate, prompt: "If the text below is in English, translate it into Simplified Chinese; otherwise translate it into English. Output only the translation." }
+    - { title: Translate, prompt: "Translate the text below into English. If it is already in English, keep it unchanged. Output only the translation." }
     - { title: Polish, prompt: "Polish the text below. Keep its meaning and language. Output only the result." }
     - { title: Explain, prompt: "Explain the content below in plain language, in 80 words or fewer." }
 

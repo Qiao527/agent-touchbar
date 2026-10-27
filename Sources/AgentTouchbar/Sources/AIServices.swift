@@ -31,7 +31,7 @@ final class AIService {
             let result: Result<String, Error>
             if let error {
                 result = .failure(error)
-            } else if let data,
+            } else if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode), let data,
                 let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                 let choices = object["choices"] as? [[String: Any]],
                 let message = choices.first?["message"] as? [String: Any],

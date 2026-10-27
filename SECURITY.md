@@ -16,7 +16,9 @@ The trust boundary is your macOS user account. agentTouchbar does not try to def
 
 - The server binds to `127.0.0.1` only and rejects connections from non-loopback addresses.
 - Every request needs a bearer token. The token is 192 random bits, generated on first launch and stored at `~/.config/agentTouchbar/token` with mode `0600`. It is compared in constant time.
-- Requests over 1 MB are rejected; the parser only accepts `Content-Length` bodies.
+- Requests over 1 MB, oversized declared bodies, duplicate headers, malformed framing, pipelined bytes, and `Transfer-Encoding` are rejected. Bodies use `Content-Length`.
+- At most 64 connections are active. Incomplete requests have a 10-second deadline; all connections are closed within 310 seconds. Permission waits are clamped to 5–300 seconds.
+- The server does not start with an empty token or an invalid port. Token creation failures are reported rather than silently using an unpersisted token.
 
 ### Approving agent actions from the Touch Bar
 
@@ -38,7 +40,7 @@ The AI API key and sensitive snippets are stored in the macOS Keychain (`atb set
 
 ### Commands in the config file
 
-`buttons`, `script`, and alert actions run shell commands from `config.yaml`. Treat the config file like code: do not paste one you have not read.
+`buttons`, `script`, and alert actions run shell commands from `config.yaml`. Treat the config file like code: do not paste one you have not read. Commands run with a wall-clock deadline; captured stdout and stderr are each limited to 1 MB. The runner terminates the launched process on timeout; this is not a sandbox or a guarantee that detached child processes have stopped.
 
 ### Data sent off the machine
 

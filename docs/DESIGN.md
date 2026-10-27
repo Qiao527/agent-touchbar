@@ -1,6 +1,6 @@
 # agentTouchbar Design
 
-> **Status:** Draft v0.2 · 2026-10-25 · Target hardware: MacBook Pro 13" M1 with Touch Bar on macOS 27
+> **Status:** Draft v0.2 · 2026-10-25 · Target hardware: MacBook Pro 13" M1 with Touch Bar; installed macOS version must be recorded during validation
 
 agentTouchbar is a macOS menu bar app that turns the Touch Bar into a context-aware "dynamic island": quiet by default, it surfaces actionable items when something needs attention and adapts its controls to what you are doing.
 
@@ -254,11 +254,11 @@ The public API only lets an app change the Touch Bar while it is frontmost. Disp
 
 [MTMR](https://github.com/Toxblh/MTMR) and [Pock](https://github.com/pock/pock) use the same approach and serve as references.
 
-**Research findings (2026-10-25):**
+**Reference implementations and validation limits:**
 
-- [StripGauge](https://github.com/CodeCampusCo/stripgauge) tested `DFRElementSetControlStripPresenceForIdentifier`, `addSystemTrayItem:`, and `presentSystemModalTouchBar:systemTrayItemIdentifier:` on **macOS 26.5.2 on an M1 13"**; all work. Its design doc also notes that occupying only the left region keeps the system brightness and volume buttons, while taking the full bar means reimplementing them.
-- BetterTouchTool relies on the same mechanism. Its author reported it working overall on the first macOS 27 beta, and the forum has no reports of Touch Bar breakage so far ([forum thread](https://community.folivora.ai/t/macos-27-golden-gate/47224)).
-- No public record yet confirms these calls on the macOS 27 release build, so the probe in `probe/` verifies them on the target Mac.
+- [MTMR](https://github.com/Toxblh/MTMR) and [Pock](https://github.com/pock/pock) are reference implementations for global Touch Bar presentation.
+- Private API names and runtime symbol availability are implementation leads, not evidence that this application's rendering or wake behavior works on a particular OS release.
+- No physical Touch Bar result is recorded for this project. Run the probe on the actual target Mac and record its hardware model, macOS version, commit, and observed behavior before making a compatibility claim.
 
 **Layout decision:** use the full bar first (`placement: 1`) and implement brightness and volume in the right zone. If the probe shows the full-bar mode does not work, fall back to the left region only and keep the system Control Strip on the right.
 
@@ -403,33 +403,33 @@ agentTouchbar/
 | Keys | English strings are the keys, passed to `L("...")`. |
 | Translations | Simplified Chinese tables live in `Sources/AgentTouchbarCore/Localization`. |
 | Enforcement | A unit test scans the sources and fails if any `L` literal lacks a translation or if placeholders differ between the key and its translation. |
-| Language selection | Follows the system language; override with `AGENT_TOUCHBAR_LANG=en\|zh`. |
+| Language selection | English by default; `AGENT_TOUCHBAR_LANG=zh` selects Chinese and `auto` follows the system. |
 
 ## 11. Testing strategy
 
 | Layer | How it is tested |
 |---|---|
 | Core logic (`AgentTouchbarCore`) | AppKit-free; unit tests run on Linux and macOS in CI. |
-| CI | GitHub Actions: a Linux container (`swift:6.1`) and a `macos-26` runner. The macOS job also builds the `.app` and runs `atb` smoke tests. |
-| Touch Bar / private API | Isolated in `TouchBar/DFR.swift`; verified on real hardware with the probe in `probe/`. |
+| CI | GitHub Actions: a Linux container (`swift:6.3`) and a `macos-26` runner. The macOS job also builds the `.app` and runs `atb` smoke tests. |
+| Touch Bar / private API | Isolated in `TouchBar/DFR.swift`; hardware verification is pending. Use the probe in `probe/` to collect evidence. |
 
 ## 12. Open questions
 
 | Question | Why it matters | How to verify |
 |---|---|---|
 | Can the app wake the Touch Bar after it dims from inactivity? | Determines whether "show only when needed" works | Run `probe/run.sh`. Known leads below. |
-| Do the `DFRFoundation` private APIs work on macOS 27? | Determines whether global display is possible | Run `probe/run.sh`. Findings in §6. |
+| Do the `DFRFoundation` private APIs work on the target macOS version? | Determines whether global display is possible | Run `probe/run.sh`. Findings in §6. |
 | How to read AirPods battery level | No public API | Try `system_profiler SPBluetoothDataType` and `ioreg` on the target Mac |
 | Bundle IDs and shortcuts for Tencent Meeting and Feishu | Needed for the Meeting scene | Run `osascript -e 'id of app "腾讯会议"'`; check each app's shortcut settings |
-| `chat.db` schema on macOS 27 | Verification codes depend on it | Test against real data in phase 2 |
+| `chat.db` schema on the target macOS version | Verification codes depend on it | Test against real data in phase 2 |
 
 **Known leads for waking the Touch Bar:**
 
-- `TouchBarServer`, which handles idle dimming, uses the `DFRBrightnessClient` class from `DFRBrightness.framework`, which has `turnOn` and `turnOff` methods. [TouchBarOff](https://github.com/gbili/touchbar-off) uses it to turn the Touch Bar off and on on an **M1 13" with macOS 15.5**, and uses `DFRGetStatus()` to read the state (bit `0x4` set means off).
+- `TouchBarServer`, which handles idle dimming, uses the `DFRBrightnessClient` class from `DFRBrightness.framework`, which has `turnOn` and `turnOff` methods. [TouchBarOff](https://github.com/gbili/touchbar-off) is a reference for investigating panel power controls and `DFRGetStatus()`. Verify these behaviors on the actual target OS; this project has no recorded hardware result.
 - The public `IOPMAssertionDeclareUserActivity` declares user activity and may also wake the Touch Bar; no test record found.
 - The probe tries each method in order (update content only → re-present → declare user activity → private API wake), records which one works, and measures how long the bar stays lit afterward.
 
-**If nothing wakes it:** alerts are also mirrored to the menu bar icon (color change or badge count) and to system notifications so they are not missed.
+**If nothing wakes it:** the app has a menu bar alert indicator. A system notification fallback is planned and has not been implemented.
 
 ## 13. Progress
 
@@ -443,7 +443,7 @@ agentTouchbar/
 | **5. Hard parts** | Meeting controls, browser tabs, web video controls, page summaries | Code complete, compiled in CI; not yet verified on hardware |
 | **6. Settings window** | Drag-and-drop layout, theme editor | Not started; config file only for now |
 
-"Code complete" means the code is written, compiles in CI, and core logic has unit tests. Nothing involving Touch Bar rendering, system permissions, or third-party apps has been verified on real hardware yet.
+These phase descriptions record the original implementation milestone, not certification of the latest commit. Check current branch CI before relying on build status. Nothing involving Touch Bar rendering, system permissions, or third-party apps has been verified on real hardware yet.
 
 ## 14. Prerequisites
 

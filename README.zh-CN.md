@@ -16,7 +16,7 @@
 | **常驻信息** | 多时区时间 · 天气 · 电量 · CPU 和内存 · 下一个日程倒计时 |
 | **可扩展** | 脚本组件（输出 JSON 的任意脚本） · `atb notify` · YAML 配置热更新 · 中英文界面 |
 
-界面语言跟随系统，也可以用环境变量 `AGENT_TOUCHBAR_LANG=zh` 或 `en` 指定。
+界面默认使用英文；`AGENT_TOUCHBAR_LANG=zh` 选择中文，`auto` 跟随系统语言。
 
 ## 安装
 
@@ -71,8 +71,8 @@ mv agentTouchbar.app /Applications/ && open /Applications/agentTouchbar.app
 
 | 部分 | 状态 |
 |---|---|
-| 核心逻辑、命令行 | 已实现，在 Linux 和 macOS 上有单元测试 |
-| 菜单栏程序、全部组件 | 已实现，在 CI 的 macOS 26 上编译通过 |
+| 核心逻辑、命令行 | Linux 上通过 61 项 Swift 测试和 9 项 CLI 集成测试 |
+| 菜单栏程序、全部组件 | 已实现；当前加固分支的 macOS CI 失败，仍需修复验证 |
 | 在真实 Touch Bar 上的表现 | **尚未验证**，请先运行 `probe/run.sh` |
 | 设置窗口 | 未开始，目前用配置文件 |
 

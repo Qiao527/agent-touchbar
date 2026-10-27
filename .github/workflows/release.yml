@@ -10,13 +10,32 @@ permissions:
 
 jobs:
   release:
+    timeout-minutes: 30
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
-      - name: Test
-        run: swift test
+      - name: Verify core and CLI
+        run: ./scripts/check.sh
+      - name: Validate release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - "$RELEASE_TAG" <<'PY'
+          import plistlib, re, sys
+          tag = sys.argv[1]
+          if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag):
+              raise SystemExit("Release tag must have the form vMAJOR.MINOR.PATCH")
+          with open("Resources/Info.plist", "rb") as source:
+              version = plistlib.load(source)["CFBundleShortVersionString"]
+          if tag != "v" + version:
+              raise SystemExit("Release tag must match CFBundleShortVersionString")
+          if f"## [{version}]" not in open("CHANGELOG.md").read():
+              raise SystemExit("Release version is missing from CHANGELOG.md")
+          PY
       - name: Build and package app
         run: ./scripts/build-app.sh
+      - name: Smoke-test packaged CLI
+        run: python3 scripts/smoke-test.py build/agentTouchbar.app/Contents/MacOS/atb
       - name: Zip
         run: |
           cd build
@@ -29,6 +48,7 @@ jobs:
           # Release notes come from the matching section of CHANGELOG.md.
           VERSION="${GITHUB_REF_NAME#v}"
           awk -v v="$VERSION" '/^## \[/{p = index($0, "[" v "]") > 0; next} p' CHANGELOG.md > notes.md
+          test -s notes.md
           gh release create "$GITHUB_REF_NAME" \
             "build/agentTouchbar-${GITHUB_REF_NAME}.zip" \
             "build/agentTouchbar-${GITHUB_REF_NAME}.zip.sha256" \

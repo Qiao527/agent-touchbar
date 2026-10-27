@@ -44,6 +44,73 @@ public struct AppConfig: Decodable, Equatable, Sendable {
         ai = try c.value(.ai, default: AISettings())
         server = try c.value(.server, default: ServerSettings())
         widgets = try c.value(.widgets, default: [])
+        try validate()
+    }
+
+    /// Reject unsafe values before hot reload replaces the last working configuration.
+    private func validate() throws {
+        func require(_ valid: Bool, _ path: String, _ expectation: String) throws {
+            guard valid else { throw ValidationError(path: path, expectation: expectation) }
+        }
+        try require(version == 1, "version", "must be 1")
+        try require((1...65535).contains(server.port), "server.port", "must be between 1 and 65535")
+        try require(
+            (5...300).contains(agents.permissionWait), "agents.permission_wait", "must be between 5 and 300 seconds")
+        try require((0...100).contains(battery.lowThreshold), "battery.low_threshold", "must be between 0 and 100")
+        try require((0...1000).contains(clipboard.maxItems), "clipboard.max_items", "must be between 0 and 1000")
+        try require((0...100).contains(clipboard.show), "clipboard.show", "must be between 0 and 100")
+        try require((0...10080).contains(calendar.leadMinutes), "calendar.lead_minutes", "must be between 0 and 10080")
+        try require(
+            theme.fontSize.isFinite && (6...72).contains(theme.fontSize), "theme.font_size", "must be between 6 and 72")
+        try require(
+            ["compact", "comfortable"].contains(theme.density), "theme.density", "must be compact or comfortable")
+        try require(["full", "app_region"].contains(touchbar.mode), "touchbar.mode", "must be full or app_region")
+        try require(
+            verificationCodes.clearClipboardAfter.isFinite
+                && (0...86400).contains(verificationCodes.clearClipboardAfter),
+            "verification_codes.clear_clipboard_after", "must be between 0 and 86400 seconds")
+        for (kind, rule) in alerts {
+            if let ttl = rule.ttl {
+                try require(
+                    ttl.isFinite && (0...604800).contains(ttl), "alerts.\(kind).ttl",
+                    "must be between 0 and 604800 seconds")
+            }
+        }
+        var ids = Set<String>()
+        let ranges: [String: ClosedRange<Double>] = [
+            "width": 1...4096, "max_width": 1...4096, "focus_minutes": 0.01...1440,
+            "rest_minutes": 0.01...1440, "water_every": 0...10080, "stand_every": 0...10080,
+            "interval": 1...604800, "timeout": 1...3600, "skip_seconds": 0...86400,
+            "latitude": -90...90, "longitude": -180...180,
+        ]
+        for widget in widgets {
+            try require(
+                !widget.id.isEmpty && ids.insert(widget.id).inserted, "widgets.id", "must be nonempty and unique")
+            for (key, range) in ranges where widget.options[key] != nil {
+                let value = widget.options[key]?.double
+                try require(
+                    value.map { $0.isFinite && range.contains($0) } == true,
+                    "widgets.\(widget.id).\(key)",
+                    "must be a finite number between \(range.lowerBound) and \(range.upperBound)")
+            }
+        }
+        for scene in scenes {
+            if let time = scene.when.time {
+                try require(
+                    TimeRange(time) != nil, "scenes.\(scene.name).when.time", "must be a valid HH:mm-HH:mm range")
+            }
+            if let days = scene.when.weekdays {
+                try require(
+                    days.allSatisfy { (1...7).contains($0) }, "scenes.\(scene.name).when.weekdays",
+                    "must contain only 1 through 7")
+            }
+        }
+    }
+
+    private struct ValidationError: LocalizedError {
+        let path: String
+        let expectation: String
+        var errorDescription: String? { "\(path): \(expectation)" }
     }
 
     /// Parses YAML text. An empty file means all defaults.
@@ -157,7 +224,7 @@ public struct AlertRule: Decodable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         enabled = try c.value(.enabled, default: enabled)
         priority = try c.value(.priority, default: priority)
-        ttl = try c.decodeIfPresent(Double.self, forKey: .ttl) ?? ttl
+        if c.contains(.ttl) { ttl = try c.decodeIfPresent(Double.self, forKey: .ttl) }
         sticky = try c.value(.sticky, default: sticky)
     }
 
@@ -339,7 +406,7 @@ public struct AIPrompt: Codable, Equatable, Sendable {
         AIPrompt(
             title: "Translate",
             prompt:
-                "If the text below is in English, translate it into Simplified Chinese; otherwise translate it into English. Output only the translation."
+                "Translate the text below into English. If it is already in English, keep it unchanged. Output only the translation."
         ),
         AIPrompt(
             title: "Polish", prompt: "Polish the text below. Keep its meaning and language. Output only the result."),

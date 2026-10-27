@@ -2,6 +2,7 @@
 // Keys are the exact English strings passed to L(...).
 extension Localization {
     static let cliStrings: [String: String] = [
+        "Invalid value for {0}": "{0} 的值无效",
         // Usage
         "Usage:": "用法：",
         "Run as a Claude Code hook (reads JSON from stdin)": "作为 Claude Code 的 hook（从标准输入读取 JSON）",

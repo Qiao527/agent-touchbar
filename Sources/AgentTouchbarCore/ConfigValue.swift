@@ -57,7 +57,9 @@ public enum ConfigValue: Codable, Equatable, Sendable {
     public var int: Int? {
         switch self {
         case .int(let value): return value
-        case .double(let value): return Int(value)
+        case .double(let value):
+            guard value.isFinite, value >= Double(Int.min), value < Double(Int.max) else { return nil }
+            return Int(value)
         case .string(let value): return Int(value)
         default: return nil
         }
