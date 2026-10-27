@@ -30,6 +30,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
+cp LICENSE THIRD_PARTY_NOTICES.md "$APP/Contents/Resources/"
 cp "$BIN/AgentTouchbar" "$APP/Contents/MacOS/AgentTouchbar"
 cp "$BIN/atb" "$APP/Contents/MacOS/atb"
 

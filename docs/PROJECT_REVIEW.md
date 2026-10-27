@@ -30,3 +30,11 @@ The existing Chinese localization and translation fixtures remain intentional op
 The command runner limits the launched process and captured output; it does not isolate arbitrary trusted configuration commands or supervise every detached descendant. The trust boundary remains the current macOS user account, as documented in `SECURITY.md`.
 
 Real Touch Bar hardware behavior and notarized distribution remain unverified requirements. No release tag should imply these have passed without recorded evidence.
+
+## Public-source review
+
+The public-source pass scanned the tracked tree and full fetched history across all remote branches with Gitleaks 8.30.1; no secret findings were reported. The scan included 18 reachable commits (17 commits with scanned patches). Git history contains a non-noreply author email address; publishing the repository also exposes commit metadata. This is a metadata disclosure decision, not a credential finding.
+
+The project has an MIT license. Yams and bundled libyaml notices are retained in `THIRD_PARTY_NOTICES.md` and copied into the app bundle. Reference links do not establish hardware compatibility; documentation now distinguishes plans, previous milestones, current CI, and actual device evidence.
+
+The latest inspected hardening run passed Linux CI and failed macOS CI before app packaging. The failure must be diagnosed and resolved before making a build-ready release claim. The default branch does not yet contain the hardening changes. The repository was still private during this review; its visibility was not changed. See `PORTFOLIO.md` for evidence-backed resume wording and remaining presentation milestones.

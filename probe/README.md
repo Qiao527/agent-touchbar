@@ -19,7 +19,7 @@ The whole run takes about 3 to 5 minutes. The terminal asks you to do two things
 - **Step 2**: When a line of text and a purple "Tap me" button appear on the Touch Bar, tap the button.
 - **Step 4**: After the "do not touch the keyboard or trackpad" prompt, take your hands off completely and wait for the Touch Bar to turn off by itself. The program then tries to light it up again and measures how long it stays lit.
 
-When it finishes, the report is saved to `agentTouchbar-probe.txt` on your Desktop. Paste its contents to Kiro.
+When it finishes, the report is saved to `agentTouchbar-probe.txt` on your Desktop. Review the report for personal information before sharing it in an issue or review. Include the tested commit, Mac model, and macOS version.
 
 ## Effects on your system
 

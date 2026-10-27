@@ -23,6 +23,8 @@ class InstallerTests(unittest.TestCase):
         self.repo = self.root / "repo"
         shutil.copytree(ROOT / "scripts", self.repo / "scripts")
         shutil.copytree(ROOT / "Resources", self.repo / "Resources")
+        for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+            shutil.copy2(ROOT / notice, self.repo / notice)
         self.bin = self.root / "tools"
         self.bin.mkdir()
         self.products = self.root / "products"
@@ -58,6 +60,7 @@ class InstallerTests(unittest.TestCase):
         result = self.install()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.app / "Contents/MacOS/atb").read_text(), "new binary")
+        self.assertTrue((self.app / "Contents/Resources/THIRD_PARTY_NOTICES.md").is_file())
         self.assertEqual((self.links / "atb").resolve(), self.app / "Contents/MacOS/atb")
         self.assertFalse(list(self.destination.glob(".agentTouchbar-install.*")))
 

@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Restore the previous application when installation or launch fails.
 
 ### Added
+- Third-party license notices retained in app bundles, public-source review notes, and evidence-backed portfolio guidance.
 - Shared local and CI verification command (`./scripts/check.sh`), CLI integration fixtures, installer rollback checks, and robustness regression tests.
 - Local server connection limits, incomplete-request deadlines, and bounded permission polling.
 - Release version checks, packaged CLI checks, signature verification, and release documentation.

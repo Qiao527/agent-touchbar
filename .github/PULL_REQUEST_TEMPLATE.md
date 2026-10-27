@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] `swift test` passes
-- [ ] `swift format lint --strict --recursive Sources Tests probe Package.swift` is clean
+- [ ] `./scripts/check.sh` passes
+- [ ] macOS build and packaged CLI checks pass for platform-specific changes
 - [ ] New user-facing strings use `L("...")` and have a Simplified Chinese translation
 - [ ] `CHANGELOG.md` updated under "Unreleased" (for user-visible changes)

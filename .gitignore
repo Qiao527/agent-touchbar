@@ -8,3 +8,18 @@ build/
 # Swift Package Manager
 .build/
 .swiftpm/
+
+# Local credentials, signing material, and private runtime data
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.mobileprovision
+*.keychain-db
+*.pem
+*.key
+agentTouchbar-probe.txt
+# Python helper caches
+__pycache__/
+*.py[cod]
