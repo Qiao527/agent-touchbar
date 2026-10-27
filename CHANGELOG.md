@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Fixed
+- Compare installer symlink targets by file identity so macOS temporary-directory aliases do not cause false test failures.
 - Reject ambiguous HTTP framing, duplicate headers, unsupported transfer encoding, malformed request lines, and oversized declared bodies.
 - Report token persistence errors and create tokens exclusively with private permissions.
 - Reject unsafe configuration values before hot reload, including invalid ports, nonfinite numbers, negative limits, invalid scene conditions, and duplicate widget IDs.
