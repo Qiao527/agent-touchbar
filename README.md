@@ -165,14 +165,14 @@ A few problems that shaped the design:
 |---|---|
 | Core logic, CLI | 61 Swift regression tests and 9 CLI integration tests pass on Linux |
 | Installer | 5 isolated rollback/file-operation tests pass; actual installation needs macOS validation |
-| Menu bar app, all widgets | Implemented; the current hardening branch has a failing macOS CI check that must be resolved |
+| Menu bar app, all widgets | Implemented; macOS CI builds the app and runs packaged CLI checks; hardware behavior is unverified |
 | Behavior on real Touch Bar hardware | **Not verified yet**; run `probe/run.sh` first |
 | Settings window | Not started; configuration is file-based |
 
 ## Roadmap
 
 - [ ] Verify on hardware with the probe and record a demo
-- [ ] System notification fallback when the Touch Bar cannot be woken
+- [x] System notification fallback when the Touch Bar cannot be shown or awakened (hardware validation pending)
 - [ ] Settings window with a drag-and-drop Touch Bar preview
 - [ ] Notarized releases
 

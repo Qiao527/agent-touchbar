@@ -79,13 +79,28 @@ enum Selection {
         }
 
         let board = NSPasteboard.general
-        let previous = board.string(forType: .string)
+        // Preserve all available pasteboard types, including concealed and transient markers.
+        let previous: [[(NSPasteboard.PasteboardType, Data)]] = (board.pasteboardItems ?? []).map { item in
+            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+        }
+        // Do not overwrite a pasteboard item that could not be captured completely.
+        guard zip(board.pasteboardItems ?? [], previous).allSatisfy({ $0.0.types.count == $0.1.count }) else {
+            return completion(nil)
+        }
         let before = board.changeCount
         Keyboard.send(KeyCombo(command: true, keyCode: 0x08))  // ⌘C
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             MainActor.assumeIsolated {
-                let text = board.changeCount != before ? board.string(forType: .string) : nil
-                if let previous { Keyboard.copy(previous) }
+                // A copy normally changes the pasteboard once. If it changed again, leave the newer content alone.
+                guard board.changeCount == before + 1 else { return completion(nil) }
+                let text = board.string(forType: .string)
+                board.clearContents()
+                let items = previous.map { values in
+                    let item = NSPasteboardItem()
+                    for (type, data) in values { item.setData(data, forType: type) }
+                    return item
+                }
+                if !items.isEmpty { board.writeObjects(items) }
                 completion(text)
             }
         }

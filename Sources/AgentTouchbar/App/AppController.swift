@@ -1,6 +1,7 @@
 import AgentTouchbarCore
 import AppKit
 import ServiceManagement
+import UserNotifications
 
 /// Wires everything together: config → data sources → scenes → Touch Bar rendering.
 @MainActor
@@ -287,7 +288,19 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.pomodoro.alerts = env.alerts
 
         env.alerts.onChange = { [weak self] in self?.scheduleRender() }
-        env.alerts.onNewAlert = { [weak self] in self?.host.wakeIfNeeded() }
+        env.alerts.onNewAlert = { [weak self] in
+            guard let self else { return }
+            self.host.wakeIfNeeded()
+            // Wake attempts are asynchronous; avoid putting alert content on the lock screen.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self, !self.env.alerts.queue.isEmpty,
+                        !self.host.isShown || DFR.isDark == true
+                    else { return }
+                    self.notifyTouchBarUnavailable()
+                }
+            }
+        }
         env.context.nowPlaying = { [weak self] in self?.env.spotify.isPlaying == true ? "spotify" : nil }
         env.context.onBattery = { [weak self] in self?.env.battery.state?.onBattery ?? false }
         env.context.inMeeting = { [weak self] in self?.env.calendar.inMeeting ?? false }
@@ -301,6 +314,24 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.bluetooth.onChange = refresh
         env.pomodoro.onChange = refresh
         env.agents.onChange = refresh
+    }
+
+    private func notifyTouchBarUnavailable() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, error in
+            guard granted else {
+                if let error { Log.error("Notification authorization failed: \(error.localizedDescription)") }
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "agentTouchbar"
+            content.body = "An alert needs your attention. Open the menu bar app."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: "touchbar-unavailable", content: content, trigger: nil)) {
+                error in
+                if let error { Log.error("Notification failed: \(error.localizedDescription)") }
+            }
+        }
     }
 
     private func wireSources() {
