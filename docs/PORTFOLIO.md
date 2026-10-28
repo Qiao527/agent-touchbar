@@ -23,7 +23,7 @@ Use the first-person verbs only for work you actually owned and can explain. Kee
 
 ## Milestones for a stronger portfolio entry
 
-1. Resolve the current macOS CI failure and link a passing run for the exact published commit.
+1. Link passing Linux and macOS CI for the exact published commit.
 2. Merge the reviewed changes into the default branch so visitors see the verified implementation and current documentation.
 3. Record a short real-hardware demo showing an alert, a scene transition, and one agent permission request. Do not substitute a mockup for hardware evidence.
 4. Publish a prerelease with reproducible installation instructions and clearly stated signing and compatibility limitations.

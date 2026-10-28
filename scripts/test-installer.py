@@ -61,7 +61,8 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.app / "Contents/MacOS/atb").read_text(), "new binary")
         self.assertTrue((self.app / "Contents/Resources/THIRD_PARTY_NOTICES.md").is_file())
-        self.assertEqual((self.links / "atb").resolve(), self.app / "Contents/MacOS/atb")
+        self.assertTrue((self.links / "atb").is_symlink())
+        self.assertTrue((self.links / "atb").samefile(self.app / "Contents/MacOS/atb"))
         self.assertFalse(list(self.destination.glob(".agentTouchbar-install.*")))
 
     def test_launch_failure_restores_previous_application(self):
@@ -77,7 +78,8 @@ class InstallerTests(unittest.TestCase):
         previous.write_text("previous CLI")
         (self.links / "atb").symlink_to(previous)
         self.assertNotEqual(self.install(FAIL_OPEN="1").returncode, 0)
-        self.assertEqual((self.links / "atb").resolve(), previous)
+        self.assertTrue((self.links / "atb").is_symlink())
+        self.assertTrue((self.links / "atb").samefile(previous))
         self.assertEqual((self.links / "atb").read_text(), "previous CLI")
 
     def test_signature_failure_preserves_existing_application(self):

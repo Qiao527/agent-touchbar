@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Fixed
+- Preserve clipboard types and concealed markers during AI selection fallback; avoid overwriting newer clipboard changes.
+- Compare installer symlink targets by file identity so macOS temporary-directory aliases do not cause false test failures.
 - Reject ambiguous HTTP framing, duplicate headers, unsupported transfer encoding, malformed request lines, and oversized declared bodies.
 - Report token persistence errors and create tokens exclusively with private permissions.
 - Reject unsafe configuration values before hot reload, including invalid ports, nonfinite numbers, negative limits, invalid scene conditions, and duplicate widget IDs.
@@ -16,6 +18,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - Restore the previous application when installation or launch fails.
 
 ### Added
+- Generic system notification fallback when the Touch Bar is unavailable or remains dark after wake attempts.
 - Third-party license notices retained in app bundles, public-source review notes, and evidence-backed portfolio guidance.
 - Shared local and CI verification command (`./scripts/check.sh`), CLI integration fixtures, installer rollback checks, and robustness regression tests.
 - Local server connection limits, incomplete-request deadlines, and bounded permission polling.

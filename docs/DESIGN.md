@@ -429,7 +429,7 @@ agentTouchbar/
 - The public `IOPMAssertionDeclareUserActivity` declares user activity and may also wake the Touch Bar; no test record found.
 - The probe tries each method in order (update content only → re-present → declare user activity → private API wake), records which one works, and measures how long the bar stays lit afterward.
 
-**If nothing wakes it:** the app has a menu bar alert indicator. A system notification fallback is planned and has not been implemented.
+**If nothing wakes it:** the app has a menu bar alert indicator and requests notification permission for a generic fallback notification. Delivery and wake behavior require interactive macOS validation.
 
 ## 13. Progress
 

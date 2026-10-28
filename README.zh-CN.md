@@ -72,7 +72,7 @@ mv agentTouchbar.app /Applications/ && open /Applications/agentTouchbar.app
 | 部分 | 状态 |
 |---|---|
 | 核心逻辑、命令行 | Linux 上通过 61 项 Swift 测试和 9 项 CLI 集成测试 |
-| 菜单栏程序、全部组件 | 已实现；当前加固分支的 macOS CI 失败，仍需修复验证 |
+| 菜单栏程序、全部组件 | 已实现；macOS CI 构建应用并检查命令行，硬件表现仍待验证 |
 | 在真实 Touch Bar 上的表现 | **尚未验证**，请先运行 `probe/run.sh` |
 | 设置窗口 | 未开始，目前用配置文件 |
 
