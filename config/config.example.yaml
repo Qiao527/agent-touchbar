@@ -33,7 +33,14 @@ scenes:
   - name: Coding
     when:
       app: [Terminal, 终端, iTerm2, Warp, Ghostty, Code, Visual Studio Code, Cursor, Xcode, Codex, Claude]
-    island: [agents, git_branch, dev]
+    island: [agent_pulse, port_guard, git_branch]
+    right: [cpu_curve, hud_btn]
+
+  - name: Design
+    when:
+      app: [Figma, Sketch, Adobe Photoshop 2024, Adobe Photoshop 2025, Illustrator]
+    island: [color_picker, hud_btn]
+    right: [vol_slider]
 
   - name: Browser
     when:
@@ -95,6 +102,28 @@ server:
 
 # Custom widgets. id is referenced from layout and scenes; type is the widget type; other keys are widget options
 widgets:
+  - id: hud_btn
+    type: hud
+    title: "⚡️ HUD"
+
+  - id: agent_pulse
+    type: agent_pulse
+    width: 120
+
+  - id: cpu_curve
+    type: cpu_sparkline
+    width: 100
+
+  - id: vol_slider
+    type: metal_volume
+    width: 120
+
+  - id: color_picker
+    type: color_picker
+
+  - id: port_guard
+    type: port_guard
+
   - id: clock
     type: clock
     zones: [Asia/Shanghai]       # add more, e.g. America/Los_Angeles; multiple zones rotate
@@ -149,3 +178,4 @@ widgets:
   #   type: script
   #   command: "~/bin/btc-price.sh"
   #   interval: 60
+
