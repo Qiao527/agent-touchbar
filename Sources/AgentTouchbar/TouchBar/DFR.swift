@@ -13,6 +13,7 @@ enum DFR {
     private typealias GetStatus = @convention(c) () -> Int
     private typealias SetPresence = @convention(c) (NSString, Bool) -> Void
     private typealias SetCloseBox = @convention(c) (Bool) -> Void
+    private typealias SetPresentationMode = @convention(c) (Int32) -> Void
 
     private static func symbol<T>(_ name: String, as type: T.Type) -> T? {
         guard let foundation, let address = dlsym(foundation, name) else { return nil }
@@ -22,6 +23,7 @@ enum DFR {
     private static let getStatus = symbol("DFRGetStatus", as: GetStatus.self)
     private static let setPresence = symbol("DFRElementSetControlStripPresenceForIdentifier", as: SetPresence.self)
     private static let setCloseBox = symbol("DFRSystemModalShowsCloseBoxWhenFrontMost", as: SetCloseBox.self)
+    private static let setPresentationModeInternal = symbol("DFRSetPresentationMode", as: SetPresentationMode.self)
 
     private static let selPresentPlacement = NSSelectorFromString(
         "presentSystemModalTouchBar:placement:systemTrayItemIdentifier:")
@@ -54,14 +56,23 @@ enum DFR {
         setCloseBox?(visible)
     }
 
+    /// Verified DFRPresentationMode: 0 = default, 3 = "app" (full-width edge-to-edge).
+    static func setPresentationMode(_ mode: Int32) {
+        setPresentationModeInternal?(mode)
+    }
+
     /// With fullWidth, the bar spans the whole Touch Bar; falls back to the left region when unsupported.
     @discardableResult
     static func present(_ bar: NSTouchBar, tray: NSTouchBarItem.Identifier, fullWidth: Bool) -> Bool {
-        if fullWidth, let method = class_getClassMethod(NSTouchBar.self, selPresentPlacement) {
-            typealias Fn = @convention(c) (AnyObject, Selector, NSTouchBar, Int, NSString) -> Void
-            let fn = unsafeBitCast(method_getImplementation(method), to: Fn.self)
-            fn(NSTouchBar.self as AnyObject, selPresentPlacement, bar, 1, tray.rawValue as NSString)
-            return true
+        if fullWidth {
+            // Hide the close box button so it doesn't overlap full-width items
+            showCloseBox(false)
+            if let method = class_getClassMethod(NSTouchBar.self, selPresentPlacement) {
+                typealias Fn = @convention(c) (AnyObject, Selector, NSTouchBar, Int, NSString) -> Void
+                let fn = unsafeBitCast(method_getImplementation(method), to: Fn.self)
+                fn(NSTouchBar.self as AnyObject, selPresentPlacement, bar, 1, tray.rawValue as NSString)
+                return true
+            }
         }
         if hasClassMethod(NSTouchBar.self, selPresent) {
             _ = (NSTouchBar.self as AnyObject).perform(selPresent, with: bar, with: tray.rawValue as NSString)
@@ -71,6 +82,7 @@ enum DFR {
     }
 
     static func dismiss(_ bar: NSTouchBar) {
+        showCloseBox(true)
         if hasClassMethod(NSTouchBar.self, selDismiss) {
             _ = (NSTouchBar.self as AnyObject).perform(selDismiss, with: bar)
         } else if hasClassMethod(NSTouchBar.self, selMinimize) {

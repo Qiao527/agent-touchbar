@@ -109,6 +109,8 @@ enum WidgetFactory {
         "now_playing": NowPlayingWidget.self,
         "spotify": NowPlayingWidget.self,
         "agents": AgentsWidget.self,
+        "agent_pulse": AgentPulseWidget.self,
+        "pulse": AgentPulseWidget.self,
         "next_event": NextEventWidget.self,
         "weather": WeatherWidget.self,
         "buttons": ButtonsWidget.self,
