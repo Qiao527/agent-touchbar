@@ -285,6 +285,10 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         env.hideOverlay = { [weak self] in self?.hideOverlay() }
         env.widgetNamed = { [weak self] id in self?.widget(id) }
         env.requestRender = { [weak self] in self?.scheduleRender() }
+        env.toggleDashboard = { [weak self] in
+            guard let self else { return }
+            self.host.toggleDashboard(env: self.env)
+        }
         env.pomodoro.alerts = env.alerts
 
         env.alerts.onChange = { [weak self] in self?.scheduleRender() }
@@ -460,6 +464,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 detail: note.detail, icon: note.icon ?? "sf:bell.fill", color: note.color,
                 actions: sanitizedActions, priority: note.priority, ttl: note.ttl)
             respond(.json(["ok": true]))
+        case "/v1/dashboard", "/v1/dashboard/toggle":
+            host.toggleDashboard(env: env)
+            respond(.json(["ok": true, "dashboardActive": host.isDashboardActive]))
         default:
             respond(.error(404, "No such endpoint"))
         }
@@ -515,6 +522,9 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         menu.addItem(.separator())
+        add(
+            host.isDashboardActive ? L("Exit Mission Control (1004pt)") : L("Mission Control (1004pt HUD)"),
+            #selector(toggleDashboard))
         add(host.isShown ? L("Hide Touch Bar") : L("Show Touch Bar"), #selector(toggleTouchBar))
         add(L("Send test alert"), #selector(testAlert))
         menu.addItem(.separator())
@@ -535,6 +545,7 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func toggleTouchBar() { host.toggle(); updateStatusIcon() }
+    @objc private func toggleDashboard() { host.toggleDashboard(env: env) }
 
     @objc private func testAlert() {
         env.alerts.post(

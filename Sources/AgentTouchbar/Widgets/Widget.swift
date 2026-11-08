@@ -23,6 +23,7 @@ final class Env {
     var hideOverlay: () -> Void = {}
     var widgetNamed: (String) -> Widget? = { _ in nil }
     var requestRender: () -> Void = {}
+    var toggleDashboard: () -> Void = {}
 
     func runAI(promptTitle: String, prompt: String, text: String, canReplace: Bool) {
         ResultPanel.shared.showLoading(promptTitle)
@@ -107,6 +108,9 @@ enum WidgetFactory {
         "sparkline": MetalSparklineWidget.self,
         "cpu_sparkline": MetalSparklineWidget.self,
         "metal_sparkline": MetalSparklineWidget.self,
+        "dashboard": DashboardWidget.self,
+        "hud": DashboardWidget.self,
+        "mission_control": DashboardWidget.self,
         "volume": VolumeWidget.self,
         "metal_slider": MetalSliderWidget.self,
         "metal_volume": MetalSliderWidget.self,

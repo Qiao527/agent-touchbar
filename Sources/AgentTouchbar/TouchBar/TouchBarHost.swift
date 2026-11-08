@@ -7,6 +7,7 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
     private static let leftID = NSTouchBarItem.Identifier("agentTouchbar.left")
     private static let islandID = NSTouchBarItem.Identifier("agentTouchbar.island")
     private static let rightID = NSTouchBarItem.Identifier("agentTouchbar.right")
+    private static let dashboardID = NSTouchBarItem.Identifier("agentTouchbar.dashboard")
     static let trayID = NSTouchBarItem.Identifier("agentTouchbar.tray")
 
     private let touchBar = NSTouchBar()
@@ -14,6 +15,10 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
     private let islandItem = NSCustomTouchBarItem(identifier: TouchBarHost.islandID)
     private let rightItem = NSCustomTouchBarItem(identifier: TouchBarHost.rightID)
     private let trayItem = NSCustomTouchBarItem(identifier: TouchBarHost.trayID)
+
+    private var dashboardTouchBar: NSTouchBar?
+    private var dashboardView: MissionControlView?
+    private(set) var isDashboardActive = false
 
     private(set) var isShown = false
     var fullWidth = true
@@ -40,6 +45,11 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
         case Self.leftID: return leftItem
         case Self.islandID: return islandItem
         case Self.rightID: return rightItem
+        case Self.dashboardID:
+            guard let dashboardView else { return nil }
+            let item = NSCustomTouchBarItem(identifier: identifier)
+            item.view = dashboardView
+            return item
         default: return nil
         }
     }
@@ -48,6 +58,46 @@ final class TouchBarHost: NSObject, NSTouchBarDelegate {
         leftItem.view = left
         islandItem.view = island
         rightItem.view = right
+    }
+
+    // MARK: - Mission Control Full-Width Dashboard (1004 pt)
+
+    func showDashboard(env: Env) {
+        guard DFR.canPresent, !isDashboardActive else { return }
+        let view = MissionControlView(env: env)
+        view.onDismiss = { [weak self] in
+            self?.hideDashboard()
+        }
+        self.dashboardView = view
+
+        let bar = NSTouchBar()
+        bar.delegate = self
+        bar.defaultItemIdentifiers = [Self.dashboardID]
+        self.dashboardTouchBar = bar
+
+        DFR.present(bar, tray: Self.trayID, fullWidth: true)
+        view.start()
+        isDashboardActive = true
+        Log.info("Entered 1004pt Mission Control Dashboard")
+    }
+
+    func hideDashboard() {
+        guard isDashboardActive else { return }
+        dashboardView?.stopAll()
+        if let bar = dashboardTouchBar {
+            DFR.dismiss(bar)
+        }
+        isDashboardActive = false
+        dashboardTouchBar = nil
+        dashboardView = nil
+
+        // Restore regular Touch Bar
+        show()
+        Log.info("Exited Mission Control Dashboard")
+    }
+
+    func toggleDashboard(env: Env) {
+        isDashboardActive ? hideDashboard() : showDashboard(env: env)
     }
 
     func show() {

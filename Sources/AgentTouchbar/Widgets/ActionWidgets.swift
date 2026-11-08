@@ -312,3 +312,17 @@ final class AIWidget: Widget {
             })
     }
 }
+
+// MARK: - Mission Control Dashboard Toggle
+
+final class DashboardWidget: Widget {
+    override func refresh() {
+        guard stack.views.isEmpty else { return }
+        let title = options.string("title", default: "⚡️ HUD") ?? "⚡️ HUD"
+        let icon = options.string("icon", default: "sf:sparkles") ?? "sf:sparkles"
+        let btn = button(title, icon: icon, color: "purple") { [weak self] in
+            self?.env.toggleDashboard()
+        }
+        setContent([btn])
+    }
+}

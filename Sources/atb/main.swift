@@ -17,6 +17,7 @@ let usage = [
     "  atb codex-notify '<json>'    " + L("Run as the legacy Codex notify command"),
     "  atb notify " + L("--title <title> [--detail <text>] [--icon sf:bell] [--color orange]"),
     "             " + L("[--ttl <seconds>] [--priority <number>] [--id <id>]"),
+    "  atb dashboard                " + L("Toggle 1004pt Mission Control full-width HUD"),
     "  atb status                   " + L("Check whether the menu bar app is running"),
     "  atb init                     " + L("Create the default config file ~/.config/agentTouchbar/config.yaml"),
     "  atb hooks claude|codex       " + L("Print the hook config to paste into the agent's config file"),
@@ -160,6 +161,30 @@ func runStatus() -> Never {
     exit(0)
 }
 
+private struct DashboardToggleRequest: Encodable {
+    let toggle: Bool
+}
+
+private struct DashboardToggleResponse: Decodable {
+    let ok: Bool
+    let dashboardActive: Bool
+}
+
+func runDashboard() -> Never {
+    let client = Client()
+    guard let reply = client.send("/v1/dashboard/toggle", DashboardToggleRequest(toggle: true)),
+        let response = try? JSONDecoder().decode(DashboardToggleResponse.self, from: reply)
+    else {
+        fail(L("Failed to toggle Mission Control (is agentTouchbar running?)"))
+    }
+    if response.dashboardActive {
+        print("⚡️ " + L("Mission Control (1004pt HUD) activated"))
+    } else {
+        print("✓ " + L("Mission Control deactivated (Control Strip restored)"))
+    }
+    exit(0)
+}
+
 func runInit() -> Never {
     let url = Paths.configFile
     if FileManager.default.fileExists(atPath: url.path) {
@@ -279,6 +304,8 @@ case "codex-notify":
     runCodexNotify(Array(arguments.dropFirst()))
 case "notify":
     runNotify(Array(arguments.dropFirst()))
+case "dashboard", "hud":
+    runDashboard()
 case "status":
     runStatus()
 case "init":
