@@ -234,7 +234,9 @@ final class DownloadsWatcher {
     }
 
     private func check() {
-        for name in list() where !known.contains(name) {
+        let current = list()
+        known.formIntersection(Set(current))
+        for name in current where !known.contains(name) {
             let ext = (name as NSString).pathExtension.lowercased()
             if Self.temporaryExtensions.contains(ext) { continue }
             let url = URL(fileURLWithPath: path).appendingPathComponent(name)

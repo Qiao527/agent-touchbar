@@ -255,6 +255,13 @@ final class VideoWidget: Widget {
     override var refreshInterval: TimeInterval? { 1 }
 
     override func refresh() {
+        guard Browser.front != nil else {
+            if hasVideo || !stack.views.isEmpty {
+                hasVideo = false
+                setContent([])
+            }
+            return
+        }
         Browser.video("return v.currentTime+','+v.duration+','+v.paused+','+v.playbackRate;") { [weak self] output in
             guard let self else { return }
             let parts = (output ?? "").split(separator: ",").map(String.init)

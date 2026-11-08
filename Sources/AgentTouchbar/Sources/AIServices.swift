@@ -66,7 +66,8 @@ enum Selection {
         let system = AXUIElementCreateSystemWide()
         var focused: CFTypeRef?
         if AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
-            let element = focused
+            let element = focused,
+            CFGetTypeID(element) == AXUIElementGetTypeID()
         {
             var selected: CFTypeRef?
             // swiftlint:disable:next force_cast

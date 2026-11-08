@@ -58,6 +58,7 @@ public enum CommandRunner {
                     while process.isRunning && ProcessInfo.processInfo.systemUptime < grace { usleep(10_000) }
                     if process.isRunning { _ = kill(process.processIdentifier, SIGKILL) }
                 }
+                process.waitUntilExit()
                 return Result(status: -2, output: "", error: "Timed out")
             }
             _ = poll(&descriptors, nfds_t(descriptors.count), 20)
@@ -68,6 +69,11 @@ public enum CommandRunner {
                     buffers[index].append(contentsOf: chunk.prefix(retained))
                 } else if count == 0 {
                     descriptors[index].fd = -1
+                } else {
+                    let err = errno
+                    if err != EAGAIN && err != EWOULDBLOCK && err != EINTR {
+                        descriptors[index].fd = -1
+                    }
                 }
             }
         }

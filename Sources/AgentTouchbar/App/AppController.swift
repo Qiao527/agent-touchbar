@@ -1,7 +1,7 @@
 import AgentTouchbarCore
 import AppKit
 import ServiceManagement
-import UserNotifications
+@preconcurrency import UserNotifications
 
 /// Wires everything together: config → data sources → scenes → Touch Bar rendering.
 @MainActor
@@ -450,10 +450,15 @@ final class AppController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let note = try? decoder.decode(NotifyRequest.self, from: request.body) else {
                 return respond(.error(400, "Malformed NotifyRequest"))
             }
+            // Strip shell commands from actions received over the local HTTP endpoint.
+            let sanitizedActions = (note.actions ?? []).map { action in
+                AlertAction(
+                    id: action.id, title: action.title, color: action.color, run: nil, dismisses: action.dismisses)
+            }
             env.alerts.post(
                 kind: note.kind ?? AlertKind.custom, id: note.id, source: "atb", title: note.title,
                 detail: note.detail, icon: note.icon ?? "sf:bell.fill", color: note.color,
-                actions: note.actions ?? [], priority: note.priority, ttl: note.ttl)
+                actions: sanitizedActions, priority: note.priority, ttl: note.ttl)
             respond(.json(["ok": true]))
         default:
             respond(.error(404, "No such endpoint"))

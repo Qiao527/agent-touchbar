@@ -124,37 +124,44 @@ public enum AttributedBodyDecoder {
     public static func text(from data: Data) -> String? {
         let bytes = [UInt8](data)
         let marker = Array("NSString".utf8)
-        guard let markerIndex = find(marker, in: bytes) else { return nil }
+        let markerIndices = findAll(marker, in: bytes)
+        guard !markerIndices.isEmpty else { return nil }
 
-        // "NSString" is followed by 5 bytes of type info, then the length
-        var index = markerIndex + marker.count + 5
-        guard index < bytes.count else { return nil }
+        for markerIndex in markerIndices {
+            // "NSString" is followed by 5 bytes of type info, then the length
+            var index = markerIndex + marker.count + 5
+            guard index < bytes.count else { continue }
 
-        var length: Int
-        if bytes[index] == 0x81 {
-            guard index + 2 < bytes.count else { return nil }
-            length = Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
-            index += 3
-        } else if bytes[index] == 0x82 {
-            guard index + 4 < bytes.count else { return nil }
-            length =
-                Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
-                | (Int(bytes[index + 3]) << 16) | (Int(bytes[index + 4]) << 24)
-            index += 5
-        } else {
-            length = Int(bytes[index])
-            index += 1
-        }
-        guard length > 0, index + length <= bytes.count else { return nil }
-        return String(bytes: bytes[index..<(index + length)], encoding: .utf8)
-    }
-
-    private static func find(_ needle: [UInt8], in haystack: [UInt8]) -> Int? {
-        guard needle.count <= haystack.count else { return nil }
-        for start in 0...(haystack.count - needle.count) where haystack[start] == needle[0] {
-            if Array(haystack[start..<(start + needle.count)]) == needle { return start }
+            var length: Int
+            if bytes[index] == 0x81 {
+                guard index + 2 < bytes.count else { continue }
+                length = Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
+                index += 3
+            } else if bytes[index] == 0x82 {
+                guard index + 4 < bytes.count else { continue }
+                length =
+                    Int(bytes[index + 1]) | (Int(bytes[index + 2]) << 8)
+                    | (Int(bytes[index + 3]) << 16) | (Int(bytes[index + 4]) << 24)
+                index += 5
+            } else {
+                length = Int(bytes[index])
+                index += 1
+            }
+            guard length > 0, index + length <= bytes.count else { continue }
+            if let text = String(bytes: bytes[index..<(index + length)], encoding: .utf8), !text.isEmpty {
+                return text
+            }
         }
         return nil
+    }
+
+    private static func findAll(_ needle: [UInt8], in haystack: [UInt8]) -> [Int] {
+        guard needle.count <= haystack.count else { return [] }
+        var result: [Int] = []
+        for start in 0...(haystack.count - needle.count) where haystack[start] == needle[0] {
+            if Array(haystack[start..<(start + needle.count)]) == needle { result.append(start) }
+        }
+        return result
     }
 
     /// For tests: encodes text in the same format.

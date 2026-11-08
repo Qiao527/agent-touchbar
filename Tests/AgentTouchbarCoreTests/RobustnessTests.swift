@@ -133,4 +133,11 @@ final class RobustnessTests: XCTestCase {
             Localization.format("{1} {0} {1} {9}", ["🙂", "long replacement"]), "long replacement 🙂 long replacement {9}"
         )
     }
+
+    func testAttributedBodyDecoderRecoversFromFalseMarker() {
+        let validPayload = AttributedBodyDecoder.encodeForTesting("验证码 8848")
+        let falseMarker = Data("prefix NSString incomplete".utf8)
+        let combined = falseMarker + validPayload
+        XCTAssertEqual(AttributedBodyDecoder.text(from: combined), "验证码 8848")
+    }
 }
